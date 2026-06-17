@@ -92,19 +92,16 @@ export default function App() {
     setModalVisible(false);
   };
 
-  // --- ОБНОВЛЕННАЯ СТАТИСТИКА ---
   const getStatistics = () => {
     const days = getDaysInMonth(currentMonth);
     let workDays = 0;
     let weekendDays = 0;
     let totalSum = 0;
 
-    // Получаем текущую дату (сегодня) без учета времени
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     days.forEach(day => {
-      // Превращаем строчку даты (ГГГГ-ММ-ДД) в объект даты для сравнения
       const [year, month, dateNum] = day.split('-').map(Number);
       const checkDate = new Date(year, month - 1, dateNum);
       checkDate.setHours(0, 0, 0, 0);
@@ -113,7 +110,6 @@ export default function App() {
         workDays++;
         totalSum += workData[day].rate * workData[day].hours;
       } else {
-        // Если день пустой И он уже наступил (меньше или равен сегодняшнему) -> это выходной
         if (checkDate <= today) {
           weekendDays++;
         }
@@ -181,7 +177,8 @@ export default function App() {
       <View style={styles.container}>
         
         <View style={styles.header}>
-          <View>
+          {/* Добавили flex: 1, чтобы левая часть забирала всё доступное место */}
+          <View style={{ flex: 1 }}>
             <Text style={styles.dateText}>{currentTime.toLocaleDateString('ru-RU')}</Text>
             <Text style={styles.timeText}>{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Text>
           </View>
@@ -281,7 +278,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 40, paddingBottom: 20 },
   container: { flex: 1, paddingHorizontal: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  dateText: { fontSize: 16, color: '#6B7280' },
+  dateText: { fontSize: 15, color: '#6B7280' }, // Сделали шрифт 15 вместо 16
   timeText: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
   archiveButton: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#E5E7EB', borderRadius: 8 },
   archiveText: { color: '#374151', fontWeight: '600' },

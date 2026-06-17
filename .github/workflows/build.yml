@@ -24,4 +24,4 @@ jobs:
         run: npm install
 
       - name: Build APK via Expo
-        run: npx eas-build --platform android --profile preview --non-interactive
+        run: run: npx eas-cli build --platform android --profile preview --non-interactive

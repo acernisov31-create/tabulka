@@ -26,6 +26,9 @@ export default function App() {
   const [rate, setRate] = useState('');
   const [hours, setHours] = useState('');
 
+  // Массив для верхней полоски дней недели
+  const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     loadData();
@@ -178,6 +181,21 @@ export default function App() {
           {currentMonth.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }).toUpperCase()}
         </Text>
 
+        {/* НАША НОВАЯ ПОЛОСКА С ДНЯМИ НЕДЕЛИ НАД СЕТКОЙ */}
+        <View style={styles.weekDaysRow}>
+          {weekDays.map((day, index) => (
+            <Text 
+              key={index} 
+              style={[
+                styles.weekDayText, 
+                (day === 'Сб' || day === 'Вс') && styles.weekendText
+              ]}
+            >
+              {day}
+            </Text>
+          ))}
+        </View>
+
         {/* Календарная сетка */}
         <ScrollView contentContainerStyle={styles.calendarGrid}>
           {getDaysInMonth(currentMonth).map((dateStr) => {
@@ -252,18 +270,38 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 40, paddingBottom: 20 }, // Отступы сверху под камеру и снизу под навигацию
+  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 40, paddingBottom: 20 },
   container: { flex: 1, paddingHorizontal: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   dateText: { fontSize: 16, color: '#6B7280' },
   timeText: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
   archiveButton: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#E5E7EB', borderRadius: 8 },
   archiveText: { color: '#374151', fontWeight: '600' },
-  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 10, textAlign: 'center' },
+  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 15, textAlign: 'center' },
+  
+  // Новые стили для строчки дней недели
+  weekDaysRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'flex-start', 
+    paddingHorizontal: 4, 
+    marginBottom: 8 
+  },
+  weekDayText: { 
+    width: (width - 32) / 7 - 8, 
+    marginHorizontal: 4, 
+    textAlign: 'center', 
+    fontSize: 14, 
+    fontWeight: '700', 
+    color: '#9CA3AF' 
+  },
+  weekendText: { 
+    color: '#EF4444' // Красный цвет для Сб и Вс
+  },
+
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start' },
   dayCell: { width: (width - 32) / 7 - 8, height: 45, margin: 4, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1 },
   weekendCell: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
-  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' }, // Ярко-синий цвет для рабочих дней
+  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
   dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
   workDayText: { color: '#FFF' },
   statsContainer: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginTop: 15, borderWidth: 1, borderColor: '#E5E7EB' },

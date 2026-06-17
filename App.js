@@ -32,29 +32,28 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getDatabase(app);
 
 export default function App() {
-  const [password, setPassword] = useState(null); // Храним текущий пароль (идентификатор списка)
-  const [inputPassword, setInputPassword] = useState(''); // Для экрана ввода
-  const [isAuthChecking, setIsAuthChecking] = useState(true); // Загрузка при старте
-  const [isLoadingData, setIsLoadingData] = useState(false); // Загрузка данных из БД
+  const [password, setPassword] = useState(null); 
+  const [inputPassword, setInputPassword] = useState(''); 
+  const [isAuthChecking, setIsAuthChecking] = useState(true); 
+  const [isLoadingData, setIsLoadingData] = useState(false); 
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [workData, setWorkData] = useState({}); 
   const [selectedDate, setSelectedDate] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [archiveModalVisible, setArchiveModalVisible] = useState(false); // Модалка архива
   const [rate, setRate] = useState('');
   const [hours, setHours] = useState('');
 
   const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-  // 1. Таймер часов и проверка сохраненного пароля на телефоне
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     checkSavedPassword();
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Слушатель базы данных в реальном времени (включается только когда есть пароль)
   useEffect(() => {
     if (!password) {
       setWorkData({});
@@ -62,10 +61,8 @@ export default function App() {
     }
 
     setIsLoadingData(true);
-    // Ссылка на ветку конкретно этого пароля в твоей Realtime Database
     const listRef = ref(db, `tabulka_lists/${password}`);
 
-    // onValue автоматически срабатывает при ЛЮБЫХ изменениях в БД у кого угодно
     const unsubscribe = onValue(listRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -79,11 +76,9 @@ export default function App() {
       setIsLoadingData(false);
     });
 
-    // Отписываемся от прослушивания, если вышли из списка
     return () => off(listRef);
   }, [password]);
 
-  // Проверка, входил ли пользователь ранее
   const checkSavedPassword = async () => {
     try {
       const savedPass = await AsyncStorage.getItem('@tabulka_password');
@@ -97,11 +92,8 @@ export default function App() {
     }
   };
 
-  // Вход / Регистрация списка по паролю
   const handleLogin = async () => {
     const trimmed = inputPassword.trim();
-    
-    // Проверка условий: минимум 8 символов и одна заглавная буква
     const hasUpperCase = /[A-ZА-Я]/.test(trimmed);
     if (trimmed.length < 8 || !hasUpperCase) {
       Alert.alert(
@@ -120,7 +112,6 @@ export default function App() {
     }
   };
 
-  // Разлогиниться (Выйти из текущего списка)
   const handleLogout = () => {
     Alert.alert(
       "Выход из списка",
@@ -143,7 +134,6 @@ export default function App() {
     );
   };
 
-  // Сохранение дня прямо в Firebase Realtime Database
   const saveDayToFirebase = async (dateStr, dayData) => {
     try {
       const dayRef = ref(db, `tabulka_lists/${password}/${dateStr}`);
@@ -156,6 +146,15 @@ export default function App() {
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: days }, (_, i) => {
+      const dayNum = i + 1;
+      return `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    });
+  };
+
+  // Функция генерации дней для любого переданного месяца (используется для архива)
+  const getDaysForSpecificMonth = (year, month) => {
     const days = new Date(year, month + 1, 0).getDate();
     return Array.from({ length: days }, (_, i) => {
       const dayNum = i + 1;
@@ -184,7 +183,6 @@ export default function App() {
       return;
     }
 
-    // Отправляем в Firebase
     saveDayToFirebase(selectedDate, { rate: numRate, hours: numHours });
     setModalVisible(false);
   };
@@ -217,6 +215,29 @@ export default function App() {
   };
 
   const stats = getStatistics();
+
+  // Расчет статистики для архивных месяцев
+  const getArchiveStatsForMonth = (backMonthsCount) => {
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() - backMonthsCount);
+    
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth();
+    const days = getDaysForSpecificMonth(year, month);
+    
+    let workDays = 0;
+    let totalSum = 0;
+
+    days.forEach(day => {
+      if (workData[day]) {
+        workDays++;
+        totalSum += workData[day].rate * workData[day].hours;
+      }
+    });
+
+    const monthName = targetDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+    return { monthName, workDays, totalSum };
+  };
 
   const exportToPDF = async () => {
     const days = getDaysInMonth(currentMonth);
@@ -361,10 +382,42 @@ export default function App() {
           <Text style={styles.totalText}>Сумма: <Text style={styles.bold}>{stats.totalSum}</Text></Text>
         </View>
 
+        {/* НОВАЯ КНОПКА АРХИВА НАД КНОПКОЙ PDF */}
+        <TouchableOpacity style={styles.archiveButton} onPress={() => setArchiveModalVisible(true)}>
+          <Text style={styles.archiveButtonText}>Архив за 4 месяца</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
           <Text style={styles.pdfButtonText}>Сохранить PDF и поделиться</Text>
         </TouchableOpacity>
 
+        {/* МОДАЛКА ДЛЯ ПРОСМОТРА АРХИВА */}
+        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Архив за прошлые 4 месяца</Text>
+              
+              <ScrollView style={{ maxHeight: 280, marginVertical: 10 }}>
+                {[1, 2, 3, 4].map((monthsBack) => {
+                  const archiveStats = getArchiveStatsForMonth(monthsBack);
+                  return (
+                    <View key={monthsBack} style={styles.archiveItem}>
+                      <Text style={styles.archiveMonthName}>{archiveStats.monthName.toUpperCase()}</Text>
+                      <Text style={styles.archiveItemText}>Отработано дней: <Text style={{fontWeight:'600'}}>{archiveStats.workDays}</Text></Text>
+                      <Text style={styles.archiveItemTotal}>Заработок: {archiveStats.totalSum}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
+                <Text style={styles.btnText}>Закрыть архив</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Модалка редактирования дня */}
         <Modal visible={modalVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -430,7 +483,7 @@ const styles = StyleSheet.create({
   
   monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 15, textAlign: 'center' },
   
-  weekDaysRow: { flexDirection: 'row', strokeLinecap: 'round', justifyContent: 'flex-start', paddingHorizontal: 4, marginBottom: 8 },
+  weekDaysRow: { flexDirection: 'row', justifyContent: 'flex-start', paddingHorizontal: 4, marginBottom: 8 },
   weekDayText: { width: (width - 32) / 7 - 8, marginHorizontal: 4, textAlign: 'center', fontSize: 14, fontWeight: '700', color: '#9CA3AF' },
   weekendText: { color: '#EF4444' },
 
@@ -440,15 +493,27 @@ const styles = StyleSheet.create({
   workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
   dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
   workDayText: { color: '#FFF' },
-  statsContainer: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginTop: 15, borderWidth: 1, borderColor: '#E5E7EB' },
+  statsContainer: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginTop: 15, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 10 },
   statsText: { fontSize: 14, color: '#4B5563', marginBottom: 4 },
   totalText: { fontSize: 18, fontWeight: 'bold', color: '#111827', marginTop: 8 },
   bold: { fontWeight: 'bold', color: '#111827' },
-  pdfButton: { backgroundColor: '#10B981', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 15, marginBottom: 10 },
+  
+  // Стили кнопок внизу экрана
+  archiveButton: { backgroundColor: '#0052CC', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 5, marginBottom: 5 },
+  archiveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  pdfButton: { backgroundColor: '#10B981', padding: 14, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
   pdfButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: width * 0.85, backgroundColor: '#FFF', padding: 20, borderRadius: 16, elevation: 5 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
+  
+  // Элементы списка архива
+  archiveItem: { padding: 12, backgroundColor: '#F3F4F6', borderRadius: 10, marginBottom: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  archiveMonthName: { fontSize: 14, fontWeight: 'bold', color: '#0052CC', marginBottom: 4 },
+  archiveItemText: { fontSize: 13, color: '#4B5563' },
+  archiveItemTotal: { fontSize: 14, fontWeight: 'bold', color: '#111827', marginTop: 4 },
+
   historyHint: { fontSize: 13, color: '#0052CC', marginBottom: 15, fontWeight: '500', lineHeight: 18 },
   input: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 8, marginBottom: 15, fontSize: 16 },
   modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },

@@ -1,6 +1,6 @@
 name: Build APK
 on:
-  workflow_dispatch: # Позволяет запускать сборку кнопкой вручную
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,7 +12,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-size: 20
+          node-version: 20
 
       - name: Setup Expo
         uses: expo/expo-github-action@v8
@@ -24,4 +24,4 @@ jobs:
         run: npm install
 
       - name: Build APK via Expo
-        run: run: npx eas-cli build --platform android --profile preview --non-interactive
+        run: npx eas-cli build --platform android --profile preview --non-interactive

@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK Local
 on:
   workflow_dispatch:
 
@@ -14,14 +14,27 @@ jobs:
         with:
           node-version: 20
 
-      - name: Setup Expo
-        uses: expo/expo-github-action@v8
+      - name: Setup Java (Required for Android Build)
+        uses: actions/setup-java@v4
         with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Build APK via Expo
-        run: npx eas-cli build --platform android --profile preview --non-interactive
+      - name: Install EAS CLI and Dependencies
+        run: |
+          npm install -g eas-cli
+          npm install
+
+      - name: Build APK Locally
+        run: npx eas-cli build --platform android --profile preview --local --non-interactive
+
+      - name: Upload APK to GitHub Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabulka-app-apk
+          path: |
+            *.apk
+            **/*.apk

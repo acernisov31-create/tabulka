@@ -19,11 +19,6 @@
         "backgroundColor": "#F9FAFB"
       },
       "package": "com.viktorbal.tabulka"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "dd418464-c229-417b-8459-6cd959778705"
-      }
     }
   }
 }

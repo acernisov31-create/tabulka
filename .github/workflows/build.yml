@@ -29,6 +29,8 @@ jobs:
           npm install
 
       - name: Build APK Locally
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: npx eas-cli build --platform android --profile preview --local --non-interactive
 
       - name: Upload APK to GitHub Artifacts
@@ -36,5 +38,6 @@ jobs:
         with:
           name: tabulka-app-apk
           path: |
+            android/app/build/outputs/apk/preview/*.apk
             *.apk
             **/*.apk

@@ -16,19 +16,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
-// Импортируем Firebase компоненты
+// 1. ИМПОРТИРУЕМ КЛИЕНТ FIRESTORE (Вместо старой Realtime Database)
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, off } from 'firebase/database';
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
-// КОНФИГУРАЦИЯ FIREBASE
+// 2. НАСТРАИВАЕМ КОНФИГ НА ТВОЙ ПРОЕКТ my-apk-protection
+// Обязательно зайди в Console Firebase -> Project Settings и скопируй оттуда ПОЛНЫЙ объект конфига (с apiKey, appId и т.д.)
 const firebaseConfig = {
-  databaseURL: "https://familyshoppinglist-3193b-default-rtdb.firebaseio.com/"
+  projectId: "my-apk-protection",
 };
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getDatabase(app);
+const db = getFirestore(app); // Теперь здесь Firestore
 
 export default function App() {
   const [password, setPassword] = useState(null); 
@@ -53,6 +54,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // 3. СЛУШАЕМ ИЗМЕНЕНИЯ ТАБЛИЦЫ ИЗ FIRESTORE
   useEffect(() => {
     if (!password) {
       setWorkData({});
@@ -60,22 +62,22 @@ export default function App() {
     }
 
     setIsLoadingData(true);
-    const listRef = ref(db, `tabulka_lists/${password}`);
+    // Данные календаря пользователя будут лежать в коллекции tabulka_lists, а имя документа — это его ключ активации
+    const docRef = doc(db, "tabulka_lists", password);
 
-    const unsubscribe = onValue(listRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setWorkData(data);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setWorkData(docSnap.data());
       } else {
         setWorkData({});
       }
       setIsLoadingData(false);
     }, (error) => {
-      Alert.alert("Ошибка БД", "Проверьте правила доступа в консоли Firebase");
+      Alert.alert("Ошибка БД", "Проверьте правила доступа Cloud Firestore в консоли");
       setIsLoadingData(false);
     });
 
-    return () => off(listRef);
+    return () => unsubscribe();
   }, [password]);
 
   const checkSavedPassword = async () => {
@@ -91,23 +93,41 @@ export default function App() {
     }
   };
 
+  // 4. ПРОВЕРКА КЛЮЧА ИЗ ТВОЕЙ ССЫЛКИ FIRESTORE (Коллекция activation_keys)
   const handleLogin = async () => {
     const trimmed = inputPassword.trim();
-    const hasUpperCase = /[A-ZА-Я]/.test(trimmed);
-    if (trimmed.length < 8 || !hasUpperCase) {
-      Alert.alert(
-        "Неверный пароль", 
-        "Пароль должен состоять минимум из 8 символов и содержать хотя бы одну заглавную букву."
-      );
+    
+    if (trimmed.length < 3) {
+      Alert.alert("Ошибка", "Слишком короткий ключ активации.");
       return;
     }
 
+    setIsAuthChecking(true);
+
     try {
-      await AsyncStorage.setItem('@tabulka_password', trimmed);
-      setPassword(trimmed);
-      setInputPassword('');
+      // Идём строго по адресу: коллекция activation_keys -> документ (например TEST-123)
+      const keyDocRef = doc(db, "activation_keys", trimmed);
+      const docSnap = await getDoc(keyDocRef);
+
+      if (docSnap.exists()) {
+        const keyData = docSnap.data();
+        
+        // Проверяем поле status внутри документа в Firestore
+        if (keyData.status === "active") {
+          await AsyncStorage.setItem('@tabulka_password', trimmed);
+          setPassword(trimmed);
+          setInputPassword('');
+        } else {
+          Alert.alert("Доступ заблокирован", "Этот ключ активации деактивирован в панели управления.");
+        }
+      } else {
+        Alert.alert("Ошибка активации", "Такого ключа не существует в системе my-apk-protection.");
+      }
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось сохранить авторизацию");
+      Alert.alert("Ошибка сети", "Не удалось связаться с сервером Firestore. Проверьте подключение.");
+      console.error(e);
+    } finally {
+      setIsAuthChecking(false);
     }
   };
 
@@ -133,12 +153,21 @@ export default function App() {
     );
   };
 
+  // 5. СОХРАНЕНИЕ ДНЕЙ В FIRESTORE
   const saveDayToFirebase = async (dateStr, dayData) => {
     try {
-      const dayRef = ref(db, `tabulka_lists/${password}/${dateStr}`);
-      await set(dayRef, dayData);
+      const docRef = doc(db, "tabulka_lists", password);
+      const updatedData = { ...workData };
+      
+      if (dayData === null) {
+        delete updatedData[dateStr];
+      } else {
+        updatedData[dateStr] = dayData;
+      }
+      
+      await setDoc(docRef, updatedData);
     } catch (e) {
-      Alert.alert("Ошибка сети", "Не удалось отправить данные в облако");
+      Alert.alert("Ошибка сети", "Не удалось отправить данные в Firestore");
     }
   };
 
@@ -200,7 +229,6 @@ export default function App() {
     setModalVisible(false);
   };
 
-  // ИСПРАВЛЕННЫЙ И ПРОВЕРЕННЫЙ АЛГОРИТМ ПОДСЧЁТА ВЫХОДНЫХ
   const calculateStatsForPeriod = (daysList) => {
     let workDays = 0;
     let weekendDays = 0;
@@ -208,25 +236,18 @@ export default function App() {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    // 1. Собираем все реальные рабочие дни в этом месяце
     const activeWorkDaysInMonth = daysList.filter(day => {
       return workData[day] && (workData[day].rate > 0 && workData[day].hours > 0);
     });
 
-    // Если рабочих дней в месяце вообще нет — выходные тоже равны 0 (чистый график)
     if (activeWorkDaysInMonth.length === 0) {
       return { workDays: 0, weekendDays: 0, totalSum: 0 };
     }
 
-    // Находим первый рабочий день месяца (числовой индекс дня)
     const firstWorkDayNum = Math.min(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
-    
-    // Находим крайнюю точку для подсчёта (либо последний рабочий день, либо сегодняшний день)
     let lastWorkDayNum = Math.max(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
     
-    // Если мы смотрим текущий реальный месяц, то конечной точкой должен быть минимум сегодняшний день
     const sampleDay = daysList[0];
     const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
     const isCurrentMonthView = (viewYear === today.getFullYear() && (viewMonth - 1) === today.getMonth());
@@ -234,11 +255,10 @@ export default function App() {
     if (isCurrentMonthView) {
       const todayNum = today.getDate();
       if (todayNum > lastWorkDayNum) {
-        lastWorkDayNum = todayNum; // Продлеваем диапазон до сегодняшнего дня включительно
+        lastWorkDayNum = todayNum;
       }
     }
 
-    // 2. Считаем статистику строго от первого рабочего дня до крайней точки
     daysList.forEach(day => {
       const dayNum = parseInt(day.split('-')[2]);
       const hasData = workData[day] && (workData[day].rate > 0 && workData[day].hours > 0);
@@ -247,7 +267,6 @@ export default function App() {
         workDays++;
         totalSum += workData[day].rate * workData[day].hours;
       } else {
-        // День считается выходным, если он лежит между первым рабочим днём и конечной точкой (включая сегодняшний)
         if (dayNum >= firstWorkDayNum && dayNum <= lastWorkDayNum) {
           weekendDays++;
         }
@@ -267,7 +286,6 @@ export default function App() {
     const month = targetDate.getMonth();
     const days = getDaysForSpecificMonth(year, month);
     
-    // Для архива используем ту же самую точную логику подсчёта
     let archiveWorkDays = 0;
     let archiveWeekendDays = 0;
     let archiveTotalSum = 0;
@@ -361,17 +379,18 @@ export default function App() {
       <SafeAreaView style={styles.authContainer}>
         <View style={styles.authCard}>
           <Text style={styles.authTitle}>Вход в «Табульку»</Text>
-          <Text style={styles.authSubtitle}>Введите пароль вашей семьи для синхронизации смен</Text>
+          <Text style={styles.authSubtitle}>Введите ваш ключ активации для доступа к системе</Text>
           <TextInput
-            placeholder="Введите секретный пароль"
-            secureTextEntry={true}
+            placeholder="Введите ключ (например: TEST-123)"
+            secureTextEntry={false}
+            autoCapitalize="characters"
             style={styles.authInput}
             value={inputPassword}
             onChangeText={setInputPassword}
           />
-          <Text style={styles.authHint}>Пароль должен содержать минимум 8 символов и 1 заглавную букву.</Text>
+          <Text style={styles.authHint}>Доступ предоставляется только по зарегистрированным ключам.</Text>
           <TouchableOpacity style={styles.authButton} onPress={handleLogin}>
-            <Text style={styles.authButtonText}>Войти / Создать список</Text>
+            <Text style={styles.authButtonText}>Проверить ключ и войти</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>

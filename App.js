@@ -22,7 +22,7 @@ import { getDatabase, ref, onValue, set, get, child, off, update } from 'firebas
 
 const { width } = Dimensions.get('window');
 
-// ТВОЙ КОНФИГ (ПРОВЕРЕН, ВСЁ СОВПАДАЕТ)
+// Конфигурация Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCJl5iCX9N0k8hFIdzVrfWORzo54VqNQLc",
   authDomain: "my-apk-protection.firebaseapp.com",
@@ -102,17 +102,23 @@ export default function App() {
     setIsAuthChecking(true);
 
     try {
-      const deviceId = Application.androidId || "WEB_TEST_ID"; 
+      // Генерируем случайный хвост, если физический ID устройства недоступен, 
+      // чтобы предотвратить одинаковые ID на разных девайсах
+      const deviceId = Application.androidId || "DEVICE_" + Math.random().toString(36).substring(2, 10).toUpperCase(); 
       const dbRef = ref(db);
       
-      // Стучимся строго в папку activation_keys
       const snapshot = await get(child(dbRef, `activation_keys/${trimmed}`));
       
       if (snapshot.exists()) {
         const keyData = snapshot.val();
-        
-        if (keyData && (keyData.status === "free" || !keyData.status)) {
+        const currentStatus = keyData.status || "free";
+        const currentDeviceId = keyData.deviceId || "";
+
+        // СЛУЧАЙ 1: Ключ еще не использован (свободен)
+        if (currentStatus === "free" && currentDeviceId === "") {
           const keyRef = ref(db, `activation_keys/${trimmed}`);
+          
+          // Записываем статус "used" и жестко привязываем сгенерированный ID устройства
           await update(keyRef, {
             status: "used",
             deviceId: deviceId
@@ -121,21 +127,23 @@ export default function App() {
           await AsyncStorage.setItem('@tabulka_password', trimmed);
           setPassword(trimmed);
           setInputPassword('');
-          Alert.alert("Успешно", "Приложение активировано!");
+          Alert.alert("Успешно", "Приложение успешно активировано!");
 
-        } else if (keyData && keyData.status === "used") {
-          if (keyData.deviceId === deviceId) {
+        // СЛУЧАЙ 2: Ключ уже активирован ранее
+        } else if (currentStatus === "used") {
+          // Пускаем внутрь только если ID в базе не пустой и строго совпадает с текущим девайсом
+          if (currentDeviceId !== "" && currentDeviceId === deviceId) {
             await AsyncStorage.setItem('@tabulka_password', trimmed);
             setPassword(trimmed);
             setInputPassword('');
           } else {
-            Alert.alert("Ошибка", "Этот ключ уже активирован на другом устройстве!");
+            Alert.alert("Ошибка активации", "Этот ключ уже закреплен за другим устройством!");
           }
         } else {
-          Alert.alert("Блокировка", "Ключ заблокирован.");
+          Alert.alert("Блокировка", "Этот ключ заблокирован администратором.");
         }
       } else {
-        Alert.alert("Уведомление", `Ключ ${trimmed} не найден в папке activation_keys базы данных.`);
+        Alert.alert("Уведомление", `Ключ не найден в папке activation_keys базы данных.`);
       }
     } catch (e) {
       Alert.alert("Ошибка Firebase", "Детали: " + e.message);
@@ -214,11 +222,6 @@ export default function App() {
     setModalVisible(false);
   };
 
-  const handleDeleteDayDirect = () => {
-    saveDayToFirebase(selectedDate, null);
-    setModalVisible(false);
-  };
-
   const calculateStatsForPeriod = (daysList) => {
     let workDays = 0; let weekendDays = 0; let totalSum = 0;
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -247,10 +250,7 @@ export default function App() {
     let archiveWorkDays = 0; let archiveTotalSum = 0;
     const activeDays = days.filter(day => workData[day] && (workData[day].rate > 0 && workData[day].hours > 0));
     if (activeDays.length > 0) {
-      const firstDay = Math.min(...activeDays.map(d => parseInt(d.split('-')[2])));
-      const lastDay = Math.max(...activeDays.map(d => parseInt(d.split('-')[2])));
       days.forEach(day => {
-        const dayNum = parseInt(day.split('-')[2]);
         if (workData[day] && (workData[day].rate > 0 && workData[day].hours > 0)) {
           archiveWorkDays++; archiveTotalSum += workData[day].rate * workData[day].hours;
         }

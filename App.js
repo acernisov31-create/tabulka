@@ -236,10 +236,13 @@ export default function App() {
         createdAt: Math.floor(Date.now() / 1000)
       });
 
-      // 2. Отправляем через EmailJS на вашу почту
-      await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      // 2. Отправляем через EmailJS
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           service_id: EMAILJS_SERVICE_ID,
           template_id: EMAILJS_TEMPLATE_ID,
@@ -253,10 +256,17 @@ export default function App() {
       });
 
       setRequestModalVisible(false);
-      Alert.alert("Отправлено", "Запрос отправлен! Разработчик с Вами свяжется, ожидайте.");
+      
+      if (response.ok) {
+        Alert.alert("Отправлено", "Запрос успешно отправлен! Ожидайте связи.");
+      } else {
+        const errorText = await response.text();
+        Alert.alert("Внимание", "Запрос сохранен в базу, но почта вернула ответ: " + errorText);
+      }
+
     } catch (e) {
       setRequestModalVisible(false);
-      Alert.alert("Отправлено", "Запрос отправлен! Разработчик с Вами свяжется, ожидайте.");
+      Alert.alert("Внимание", "Запрос сохранен в Firebase, но возникла ошибка сети при отправке на почту.");
     }
   };
 
@@ -416,242 +426,4 @@ export default function App() {
     const htmlContent = `<html><head><style>body{font-family:'Helvetica';padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:center;}</style></head><body><h1>Отчет — ${monthStr}</h1><table><tr><th>День</th><th>Статус</th><th>Ставка</th><th>Часы</th><th>Сумма</th></tr>${tableRows}</table></body></html>`;
     try {
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await Sharing.shareAsync(uri);
-    } catch (error) {
-      Alert.alert("Ошибка", "Не удалось создать PDF");
-    }
-  };
-
-  if (isAuthChecking) {
-    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#0052CC" /></View>;
-  }
-
-  if (isTrialExpired) {
-    return (
-      <SafeAreaView style={styles.authContainer}>
-        <View style={[styles.authCard, { borderColor: '#EF4444', borderWidth: 1.5 }]}>
-          <Text style={[styles.authTitle, { color: '#EF4444' }]}>Срок пробного тестирования (7 дней) окончен</Text>
-          
-          <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>Запросить полную версию:</Text>
-          <TextInput placeholder="Ваше Имя" style={[styles.authInput, { marginBottom: 10 }]} value={clientName} onChangeText={setClientName} />
-          <TextInput placeholder="Телефон" keyboardType="phone-pad" style={[styles.authInput, { marginBottom: 15 }]} value={clientPhone} onChangeText={setClientPhone} />
-          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#10B981', marginBottom: 25 }]} onPress={handleSendSupportRequest}>
-            <Text style={styles.authButtonText}>Отправить запрос</Text>
-          </TouchableOpacity>
-
-          <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>Ввести постоянный ключ:</Text>
-          <TextInput
-            placeholder="Постоянный ключ активации"
-            autoCapitalize="characters"
-            style={styles.authInput}
-            value={inputPassword}
-            onChangeText={setInputPassword}
-          />
-          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#0052CC' }]} onPress={handleLogin}>
-            <Text style={styles.authButtonText}>Активировать</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const isCurrentModeTrial = password && password.startsWith("TRIAL_MODE_");
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={{ flex: 1.2 }}>
-            <Text style={styles.dateText}>{currentTime.toLocaleDateString('ru-RU')}</Text>
-            <Text style={styles.timeText}>{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Text>
-          </View>
-          
-          {isCurrentModeTrial ? (
-            <TouchableOpacity style={styles.requestHeaderButton} onPress={() => setRequestModalVisible(true)}>
-              <Text style={styles.requestHeaderButtonText}>Запросить полную версию</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>Выход</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.monthTitle}>{currentMonth.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }).toUpperCase()}</Text>
-
-        <View style={styles.weekDaysRow}>
-          {weekDays.map((day, index) => <Text key={index} style={[styles.weekDayText, (day==='Сб'||day==='Вс') && styles.weekendText]}>{day}</Text>)}
-        </View>
-
-        {isLoadingData ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#0052CC" /></View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.calendarGrid}>
-            {(() => {
-              const days = getDaysInMonth(currentMonth);
-              if (days.length === 0) return null;
-
-              const firstDayDate = new Date(days[0]);
-              let startOfWeekOffset = firstDayDate.getDay(); 
-              startOfWeekOffset = startOfWeekOffset === 0 ? 6 : startOfWeekOffset - 1;
-
-              const gridCells = [];
-              for (let i = 0; i < startOfWeekOffset; i++) {
-                gridCells.push(<View key={`empty-${i}`} style={[styles.dayCell, { borderColor: 'transparent', backgroundColor: 'transparent' }]} />);
-              }
-
-              days.forEach((dateStr) => {
-                const isWorkDay = workData[dateStr] && (workData[dateStr].rate > 0 && workData[dateStr].hours > 0);
-                const dayNum = dateStr.split('-')[2];
-                gridCells.push(
-                  <TouchableOpacity key={dateStr} style={[styles.dayCell, isWorkDay ? styles.workDayCell : styles.weekendCell]} onPress={() => handleDayPress(dateStr)}>
-                    <Text style={[styles.dayText, isWorkDay && styles.workDayText]}>{parseInt(dayNum)}</Text>
-                  </TouchableOpacity>
-                );
-              });
-
-              const rows = [];
-              for (let i = 0; i < gridCells.length; i += 7) {
-                rows.push(
-                  <View key={`row-${i}`} style={{ flexDirection: 'row', justifyContent: 'flex-start', width: '100%' }}>
-                    {gridCells.slice(i, i + 7)}
-                  </View>
-                );
-              }
-
-              return rows;
-            })()}
-          </ScrollView>
-        )}
-
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>Рабочих дней: {stats.workDays}</Text>
-          <Text style={styles.statsText}>Выходных дней: {stats.weekendDays}</Text>
-          <Text style={styles.totalText}>Сумма: {stats.totalSum}</Text>
-        </View>
-
-        <TouchableOpacity style={styles.archiveButton} onPress={() => setArchiveModalVisible(true)}>
-          <Text style={styles.archiveButtonText}>Архив</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
-          <Text style={styles.pdfButtonText}>Сохранить PDF</Text>
-        </TouchableOpacity>
-
-        <Modal visible={requestModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Введите Имя и Телефон для связи</Text>
-              <TextInput placeholder="Ваше Имя" style={styles.input} value={clientName} onChangeText={setClientName} />
-              <TextInput placeholder="Телефон" keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.btn, styles.btnSave, { backgroundColor: '#10B981' }]} onPress={handleSendSupportRequest}><Text style={styles.btnText}>Отправить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Архив</Text>
-              <ScrollView style={{ maxHeight: 250 }}>
-                {[1, 2, 3, 4].map((m) => {
-                  const a = getArchiveStatsForMonth(m);
-                  return (
-                    <View key={m} style={styles.archiveItem}>
-                      <Text style={styles.archiveMonthName}>{a.monthName}</Text>
-                      <Text style={styles.archiveItemTotal}>Заработок: {a.totalSum}</Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
-                <Text style={styles.btnText}>Закрыть</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={modalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>День: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
-              <TextInput placeholder="Ставка" style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
-              <TextInput placeholder="Часы" style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleSaveDay}><Text style={styles.btnText}>Сохранить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
-
-      {trialNotice && (
-        <View style={styles.trialToastContainer} pointerEvents="none">
-          <View style={styles.trialToast}>
-            <Text style={styles.trialToastText}>⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (ОСТАЛОСЬ {daysLeft} ДН.)</Text>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
-  authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  authCard: { width: width * 0.9, backgroundColor: '#FFF', padding: 22, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 15, textAlign: 'center' },
-  authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 8, textAlign: 'left' },
-  authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  authButton: { padding: 13, borderRadius: 10, alignItems: 'center' },
-  authButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 30 },
-  container: { flex: 1, paddingHorizontal: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  dateText: { fontSize: 14, color: '#6B7280' },
-  timeText: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
-  
-  logoutButton: { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#EF4444', borderRadius: 6 },
-  logoutText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
-  
-  requestHeaderButton: { flex: 1, marginHorizontal: 6, paddingVertical: 6, paddingHorizontal: 4, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  requestHeaderButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
-
-  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 10, textAlign: 'center' },
-  weekDaysRow: { flexDirection: 'row', marginBottom: 8 },
-  weekDayText: { width: (width - 32) / 7 - 8, marginHorizontal: 4, textAlign: 'center', fontWeight: '700', color: '#9CA3AF' },
-  weekendText: { color: '#EF4444' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: { width: (width - 32) / 7 - 8, height: 42, margin: 4, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1 },
-  weekendCell: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
-  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
-  dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-  workDayText: { color: '#FFF' },
-  statsContainer: { backgroundColor: '#FFF', padding: 14, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: '#E5E7EB' },
-  statsText: { fontSize: 14, color: '#4B5563' },
-  totalText: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
-  archiveButton: { backgroundColor: '#0052CC', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  archiveButtonText: { color: '#FFF', fontWeight: 'bold' },
-  pdfButton: { backgroundColor: '#10B981', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  pdfButtonText: { color: '#FFF', fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: width * 0.85, backgroundColor: '#FFF', padding: 20, borderRadius: 16 },
-  modalTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-  archiveItem: { padding: 10, backgroundColor: '#F3F4F6', borderRadius: 8, marginBottom: 6 },
-  archiveMonthName: { fontWeight: 'bold', color: '#0052CC' },
-  archiveItemTotal: { fontWeight: 'bold' },
-  input: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, marginBottom: 10 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-  btn: { padding: 10, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  btnSave: { backgroundColor: '#0052CC', flex: 1, marginRight: 5 },
-  btnCancel: { backgroundColor: '#9CA3AF' },
-  btnText: { color: '#FFF', fontWeight: 'bold' },
-  
-  trialToastContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
-  trialToast: { backgroundColor: 'rgba(0, 0, 0, 0.88)', paddingVertical: 18, paddingHorizontal: 26, borderRadius: 14, maxWidth: width * 0.9, elevation: 8 },
-  trialToastText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 }
-});
+      await Sharing.shareAsync

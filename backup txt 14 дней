@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "табулька",
+    "slug": "tabulka",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F9FAFB"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./icon.png",
+        "backgroundColor": "#F9FAFB"
+      },
+      "package": "com.viktorbal.tabulka"
+    }
+  }
+}

@@ -1,213 +1,505 @@
 import React, { useState, useEffect } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ActivityIndicator,
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  Modal, 
+  TextInput, 
+  ScrollView, 
+  SafeAreaView, 
+  Dimensions,
   Alert,
-  SafeAreaView,
-  Modal
+  ActivityIndicator
 } from 'react-native';
-import database from '@react-native-firebase/database';
-import { Application } from 'expo-application'; // или используйте вашу текущую библиотеку для получения ID устройства
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import * as Application from 'expo-application';
 
-// Константа для 14 дней в секундах (14 дней * 24 часа * 60 минут * 60 секунд)
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getDatabase, ref, onValue, set, get, child, off, update } from 'firebase/database';
+
+const { width } = Dimensions.get('window');
+
+// Константа времени триала (14 дней в секундах)
 const TRIAL_DURATION_SECONDS = 14 * 24 * 60 * 60;
 
+// Конфигурация Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyCJl5iCX9N0k8hFIdzVrfWORzo54VqNQLc",
+  authDomain: "my-apk-protection.firebaseapp.com",
+  databaseURL: "https://my-apk-protection-default-rtdb.firebaseio.com",
+  projectId: "my-apk-protection",
+  storageBucket: "my-apk-protection.firebasestorage.app",
+  messagingSenderId: "686147592915",
+  appId: "1:686147592915:web:9aecdcddc12cdcc1306a26"
+};
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const db = getDatabase(app);
+
 export default function App() {
-  const [keyInput, setKeyInput] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userKey, setUserKey] = useState(null);
-  const [deviceId, setDeviceId] = useState('');
+  const [password, setPassword] = useState(null); 
+  const [inputPassword, setInputPassword] = useState(''); 
+  const [isAuthChecking, setIsAuthChecking] = useState(true); 
+  const [isLoadingData, setIsLoadingData] = useState(false); 
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [workData, setWorkData] = useState({}); 
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [archiveModalVisible, setArchiveModalVisible] = useState(false); 
+  const [rate, setRate] = useState('');
+  const [hours, setHours] = useState('');
 
   // --- НОВЫЕ СОСТОЯНИЯ ДЛЯ ТЕСТОВОГО РЕЖИМА ---
-  const [trialNotice, setTrialNotice] = useState(false); // Показ уведомления на 3 секунды
-  const [isTrialExpired, setIsTrialExpired] = useState(false); // Блокировка экрана по истечении 14 дней
+  const [trialNotice, setTrialNotice] = useState(false); // Для показа 3-секундного баннера
+  const [isTrialExpired, setIsTrialExpired] = useState(false); // Для экрана блокировки
+
+  const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
   useEffect(() => {
-    getDeviceAndCheckAuth();
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    checkSavedPassword();
+    return () => clearInterval(timer);
   }, []);
 
-  const getDeviceAndCheckAuth = async () => {
+  useEffect(() => {
+    if (!password) {
+      setWorkData({});
+      return;
+    }
+
+    setIsLoadingData(true);
+    const listRef = ref(db, `tabulka_lists/${password}`);
+
+    const unsubscribe = onValue(listRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) setWorkData(data);
+      else setWorkData({});
+      setIsLoadingData(false);
+    }, (error) => {
+      Alert.alert("Ошибка БД", "Проверьте правила доступа в консоли: " + error.message);
+      setIsLoadingData(false);
+    });
+
+    return () => off(listRef);
+  }, [password]);
+
+  const checkSavedPassword = async () => {
     try {
-      // Получаем уникальный ID устройства (используйте ваш текущий рабочий способ)
-      const id = Application.androidId || 'DEVELOPMENT_DEVICE_ID'; 
-      setDeviceId(id);
-      
-      // Проверяем, авторизован ли уже этот телефон в базе
-      const snapshot = await database().ref('activation_keys').once('value');
-      const keys = snapshot.val();
-      
-      if (keys) {
-        let foundKey = null;
-        let keyData = null;
-
-        // Ищем, привязан ли этот deviceId к какому-либо ключу
-        Object.keys(keys).forEach(k => {
-          if (keys[k].deviceId === id && keys[k].status === 'used') {
-            foundKey = k;
-            keyData = keys[k];
-          }
-        });
-
-        if (foundKey && keyData) {
-          setUserKey(foundKey);
+      const savedPass = await AsyncStorage.getItem('@tabulka_password');
+      if (savedPass) {
+        // Если пароль сохранен, проверим в фоне, не тестовый ли он и не истек ли
+        const deviceId = Application.androidId || "DEVICE_GENERIC";
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, `activation_keys/${savedPass}`));
+        
+        if (snapshot.exists()) {
+          const keyData = snapshot.val();
           
-          // Проверка на тестовый режим для уже активированного ключа
           if (keyData.type === 'trial' && keyData.activatedAt) {
             const currentTimeSeconds = Math.floor(Date.now() / 1000);
             const timePassed = currentTimeSeconds - keyData.activatedAt;
 
             if (timePassed > TRIAL_DURATION_SECONDS) {
-              // Если 14 дней прошло — блокируем
               setIsTrialExpired(true);
-              setIsAuthenticated(false);
-              setIsLoading(false);
-              return;
+              setIsAuthChecking(false);
+              return; // Оставляем на экране блокировки
             } else {
-              // Если еще тестируется — показываем уведомление на 3 секунды
+              // Если все ок, покажем плашку на 3 секунды
               setTrialNotice(true);
-              setTimeout(() => {
-                setTrialNotice(false);
-              }, 3000);
+              setTimeout(() => setTrialNotice(false), 3000);
             }
           }
-
-          setIsAuthenticated(true);
         }
+        setPassword(savedPass);
       }
-    } catch (error) {
-      console.log('Ошибка проверки авторизации:', error);
+    } catch (e) {
+      Alert.alert("Ошибка", "Не удалось прочитать локальную память");
     } finally {
-      setIsLoading(false);
+      setIsAuthChecking(false);
     }
   };
 
-  // Функция первой активации ключа (когда пользователь вводит его руками)
-  const handleActivateKey = async () => {
-    if (!keyInput.trim()) {
-      Alert.alert('Ошибка', 'Введите ключ активации');
+  const handleLogin = async () => {
+    const trimmed = inputPassword.trim();
+    if (trimmed.length < 3) {
+      Alert.alert("Неверный формат", "Слишком короткий ключ активации.");
       return;
     }
 
-    setIsLoading(true);
-    const cleanKey = keyInput.trim();
+    setIsAuthChecking(true);
 
     try {
-      const keyRef = database().ref(`activation_keys/${cleanKey}`);
-      const snapshot = await keyRef.once('value');
+      const deviceId = Application.androidId || "DEVICE_" + Math.random().toString(36).substring(2, 10).toUpperCase(); 
+      const dbRef = ref(db);
       
-      if (!snapshot.exists()) {
-        Alert.alert('Ошибка', 'Такого ключа не существует');
-        setIsLoading(false);
-        return;
-      }
-
-      const keyData = snapshot.val();
-
-      if (keyData.status === 'used') {
-        Alert.alert('Ошибка', 'Этот ключ уже активирован на другом устройстве');
-        setIsLoading(false);
-        return;
-      }
-
-      // Формируем данные для обновления ключа в базе
-      const updateData = {
-        status: 'used',
-        deviceId: deviceId
-      };
-
-      // Если ключ тестовый — записываем время активации прямо сейчас
-      if (keyData.type === 'trial') {
-        const activationTime = Math.floor(Date.now() / 1000); // Текущее время в секундах
-        updateData.activatedAt = activationTime;
-        
-        // Показываем приветственное уведомление на 3 секунды
-        setTrialNotice(true);
-        setTimeout(() => {
-          setTrialNotice(false);
-        }, 3000);
-      }
-
-      // Сохраняем данные в Firebase
-      await keyRef.update(updateData);
+      const snapshot = await get(child(dbRef, `activation_keys/${trimmed}`));
       
-      setUserKey(cleanKey);
-      setIsAuthenticated(true);
-      Alert.alert('Успешно', 'Приложение успешно активировано!');
+      if (snapshot.exists()) {
+        const keyData = snapshot.val();
+        const currentStatus = keyData.status || "free";
+        const currentDeviceId = keyData.deviceId || "";
+        const isTrialKey = keyData.type === "trial";
 
-    } catch (error) {
-      Alert.alert('Ошибка', 'Не удалось связаться с сервером');
-      console.log(error);
+        if (currentStatus === "free" && currentDeviceId === "") {
+          const keyRef = ref(db, `activation_keys/${trimmed}`);
+          
+          // Готовим объект для обновления в Firebase
+          const updateFields = {
+            status: "used",
+            deviceId: deviceId
+          };
+
+          // Если ключ тестовый — фиксируем время активации прямо сейчас
+          if (isTrialKey) {
+            updateFields.activatedAt = Math.floor(Date.now() / 1000);
+            // Запускаем показ плашки
+            setTrialNotice(true);
+            setTimeout(() => setTrialNotice(false), 3000);
+          }
+
+          await update(keyRef, updateFields);
+
+          await AsyncStorage.setItem('@tabulka_password', trimmed);
+          setIsTrialExpired(false); // Снимаем флаг блокировки, если ввели свежий ключ
+          setPassword(trimmed);
+          setInputPassword('');
+          Alert.alert("Успешно", isTrialKey ? "Активирован тестовый период на 14 дней!" : "Приложение успешно активировано!");
+
+        } else if (currentStatus === "used") {
+          if (currentDeviceId !== "" && currentDeviceId === deviceId) {
+            
+            // Если ключ используется на этом устройстве, проверяем время триала
+            if (isTrialKey && keyData.activatedAt) {
+              const currentTimeSeconds = Math.floor(Date.now() / 1000);
+              if (currentTimeSeconds - keyData.activatedAt > TRIAL_DURATION_SECONDS) {
+                setIsTrialExpired(true);
+                Alert.alert("Тестирование завершено", "Срок действия тестового ключа истек.");
+                setIsAuthChecking(false);
+                return;
+              } else {
+                setTrialNotice(true);
+                setTimeout(() => setTrialNotice(false), 3000);
+              }
+            }
+
+            await AsyncStorage.setItem('@tabulka_password', trimmed);
+            setIsTrialExpired(false);
+            setPassword(trimmed);
+            setInputPassword('');
+          } else {
+            Alert.alert("Ошибка активации", "Этот ключ уже закреплен за другим устройством!");
+          }
+        } else {
+          Alert.alert("Блокировка", "Этот ключ заблокирован администратором.");
+        }
+      } else {
+        Alert.alert("Уведомление", `Ключ не найден в папке activation_keys базы данных.`);
+      }
+    } catch (e) {
+      Alert.alert("Ошибка Firebase", "Детали: " + e.message);
+      console.error(e);
     } finally {
-      setIsLoading(false);
+      setIsAuthChecking(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007BFF" />
-      </View>
-    );
+  const handleLogout = () => {
+    Alert.alert("Выход", "Выйти из профиля?", [
+      { text: "Отмена", style: "cancel" },
+      { 
+        text: "Выйти", 
+        style: "destructive",
+        onPress: async () => {
+          await AsyncStorage.removeItem('@tabulka_password');
+          setPassword(null);
+          setIsTrialExpired(false);
+        }
+      }
+    ]);
+  };
+
+  const saveDayToFirebase = async (dateStr, dayData) => {
+    try {
+      const dayRef = ref(db, `tabulka_lists/${password}/${dateStr}`);
+      await set(dayRef, dayData);
+    } catch (e) {
+      Alert.alert("Ошибка сети", "Не удалось отправить данные");
+    }
+  };
+
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: days }, (_, i) => {
+      const dayNum = i + 1;
+      return `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    });
+  };
+
+  const getDaysForSpecificMonth = (year, month) => {
+    const days = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: days }, (_, i) => {
+      const dayNum = i + 1;
+      return `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    });
+  };
+
+  const handleDayPress = (dateStr) => {
+    setSelectedDate(dateStr);
+    if (workData[dateStr] && (workData[dateStr].rate > 0 || workData[dateStr].hours > 0)) {
+      setRate(workData[dateStr].rate.toString());
+      setHours(workData[dateStr].hours.toString());
+    } else {
+      setRate('');
+      setHours('');
+    }
+    setModalVisible(true);
+  };
+
+  const handleSaveDay = () => {
+    const numRate = parseFloat(rate);
+    const numHours = parseFloat(hours);
+    if (rate === '0' && hours === '0') {
+      saveDayToFirebase(selectedDate, null);
+      setModalVisible(false);
+      return;
+    }
+    if (!rate || !hours || isNaN(numRate) || isNaN(numHours)) {
+      Alert.alert("Ошибка", "Введите корректные числа");
+      return;
+    }
+    saveDayToFirebase(selectedDate, { rate: numRate, hours: numHours });
+    setModalVisible(false);
+  };
+
+  const calculateStatsForPeriod = (daysList) => {
+    let workDays = 0; let weekendDays = 0; let totalSum = 0;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const activeWorkDaysInMonth = daysList.filter(day => workData[day] && (workData[day].rate > 0 && workData[day].hours > 0));
+    if (activeWorkDaysInMonth.length === 0) return { workDays: 0, weekendDays: 0, totalSum: 0 };
+    const firstWorkDayNum = Math.min(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
+    let lastWorkDayNum = Math.max(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
+    const sampleDay = daysList[0]; const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
+    if (viewYear === today.getFullYear() && (viewMonth - 1) === today.getMonth()) {
+      if (today.getDate() > lastWorkDayNum) lastWorkDayNum = today.getDate();
+    }
+    daysList.forEach(day => {
+      const dayNum = parseInt(day.split('-')[2]);
+      const hasData = workData[day] && (workData[day].rate > 0 && workData[day].hours > 0);
+      if (hasData) { workDays++; totalSum += workData[day].rate * workData[day].hours; }
+      else { if (dayNum >= firstWorkDayNum && dayNum <= lastWorkDayNum) weekendDays++; }
+    });
+    return { workDays, weekendDays, totalSum };
+  };
+
+  const stats = calculateStatsForPeriod(getDaysInMonth(currentMonth));
+
+  const getArchiveStatsForMonth = (backMonthsCount) => {
+    const targetDate = new Date(); targetDate.setMonth(targetDate.getMonth() - backMonthsCount);
+    const year = targetDate.getFullYear(); const month = targetDate.getMonth(); const days = getDaysForSpecificMonth(year, month);
+    let archiveWorkDays = 0; let archiveTotalSum = 0;
+    const activeDays = days.filter(day => workData[day] && (workData[day].rate > 0 && workData[day].hours > 0));
+    if (activeDays.length > 0) {
+      days.forEach(day => {
+        if (workData[day] && (workData[day].rate > 0 && workData[day].hours > 0)) {
+          archiveWorkDays++; archiveTotalSum += workData[day].rate * workData[day].hours;
+        }
+      });
+    }
+    const monthName = targetDate.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+    return { monthName, workDays: archiveWorkDays, totalSum: archiveTotalSum };
+  };
+
+  const exportToPDF = async () => {
+    const days = getDaysInMonth(currentMonth);
+    const monthStr = currentMonth.toLocaleString('ru-RU', { month: 'long', year: 'numeric' });
+    let tableRows = '';
+    days.forEach(day => {
+      const data = workData[day];
+      const hasData = data && (data.rate > 0 && data.hours > 0);
+      const dayNum = day.split('-')[2];
+      if (hasData) {
+        tableRows += `<tr><td>${dayNum}</td><td>Рабочий</td><td>${data.rate}</td><td>${data.hours}</td><td>${data.rate * data.hours}</td></tr>`;
+      } else {
+        tableRows += `<tr><td>${dayNum}</td><td>Выходной</td><td>-</td><td>-</td><td>-</td></tr>`;
+      }
+    });
+
+    const htmlContent = `<html><head><style>body{font-family:'Helvetica';padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:center;}</style></head><body><h1>Отчет — ${monthStr}</h1><table><tr><th>День</th><th>Статус</th><th>Ставка</th><th>Часы</th><th>Сумма</th></tr>${tableRows}</table></body></html>`;
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await Sharing.shareAsync(uri);
+    } catch (error) {
+      Alert.alert("Ошибка", "Не удалось создать PDF");
+    }
+  };
+
+  if (isAuthChecking) {
+    return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#0052CC" /></View>;
   }
 
-  // --- ЭКРАН БЛОКИРОВКИ: ТЕСТОВЫЙ ПЕРИОД ИСТЕК ---
+  // --- ЭКРАН БЛОКИРОВКИ: СРОК ТЕСТИРОВАНИЯ ИСТЕК ---
   if (isTrialExpired) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.expiredContainer}>
-          <Text style={styles.expiredTitle}>Тестирование закончилось</Text>
-          <Text style={styles.expiredText}>
+      <SafeAreaView style={styles.authContainer}>
+        <View style={[styles.authCard, { borderColor: '#EF4444', borderWidth: 1.5 }]}>
+          <Text style={[styles.authTitle, { color: '#EF4444' }]}>Тестирование закончилось</Text>
+          <Text style={styles.authSubtitle}>
             Срок действия вашего тестового ключа (14 дней) исчерпан. Пожалуйста, введите постоянный ключ для продолжения работы.
           </Text>
           <TextInput
-            style={styles.input}
             placeholder="Введите постоянный ключ"
-            value={keyInput}
-            onChangeText={setKeyInput}
             autoCapitalize="characters"
+            style={styles.authInput}
+            value={inputPassword}
+            onChangeText={setInputPassword}
           />
-          <TouchableOpacity style={styles.button} onPress={handleActivateKey}>
-            <Text style={styles.buttonText}>Активировать полную версию</Text>
+          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#EF4444' }]} onPress={handleLogin}>
+            <Text style={styles.authButtonText}>Активировать постоянно</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // --- ЭКРАН ВВОДА ПЕРВОГО КЛЮЧА (ЕСЛИ ЕЩЕ НЕ АВТОРИЗОВАН) ---
-  if (!isAuthenticated) {
+  // --- ЭКРАН АВТОРИЗАЦИИ (ЕСЛИ КЛЮЧ ЕЩЕ НЕ ВВЕДЕН) ---
+  if (!password) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loginContainer}>
-          <Text style={styles.title}>Активация приложения</Text>
+      <SafeAreaView style={styles.authContainer}>
+        <View style={styles.authCard}>
+          <Text style={styles.authTitle}>Вход в «Табульку»</Text>
+          <Text style={styles.authSubtitle}>Введите ключ активации</Text>
           <TextInput
-            style={styles.input}
-            placeholder="Введите ваш ключ"
-            value={keyInput}
-            onChangeText={setKeyInput}
+            placeholder="TAB-XXXX-XXXX"
             autoCapitalize="characters"
+            style={styles.authInput}
+            value={inputPassword}
+            onChangeText={setInputPassword}
           />
-          <TouchableOpacity style={styles.button} onPress={handleActivateKey}>
-            <Text style={styles.buttonText}>Войти</Text>
+          <TouchableOpacity style={styles.authButton} onPress={handleLogin}>
+            <Text style={styles.authButtonText}>Активировать</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // --- ГЛАВНЫЙ ЭКРАН ВАШЕГО ПРИЛОЖЕНИЯ (ВАШ КАЛЕНДАРЬ И ТАБЛИЦЫ) ---
+  // --- ГЛАВНЫЙ ЭКРАН ПРИЛОЖЕНИЯ ---
   return (
-    <SafeAreaView style={styles.mainContainer}>
-      
-      {/* Остальной ваш оригинальный экран (Календарь, Настройки, Часы и т.д.) */}
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Здесь отображается весь ваш рабочий интерфейс приложения</Text>
-        <Text style={{ marginTop: 10, color: 'gray' }}>Ключ: {userKey}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.dateText}>{currentTime.toLocaleDateString('ru-RU')}</Text>
+            <Text style={styles.timeText}>{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Text>
+          </View>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>Выйти</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.monthTitle}>{currentMonth.toLocaleString('ru-RU', { month: 'long', year: 'numeric' }).toUpperCase()}</Text>
+
+        <View style={styles.weekDaysRow}>
+          {weekDays.map((day, index) => <Text key={index} style={[styles.weekDayText, (day==='Сб'||day==='Вс') && styles.weekendText]}>{day}</Text>)}
+        </View>
+
+        {isLoadingData ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="large" color="#0052CC" /></View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.calendarGrid}>
+            {(() => {
+              const days = getDaysInMonth(currentMonth);
+              if (days.length === 0) return null;
+
+              const firstDayDate = new Date(days[0]);
+              let startOfWeekOffset = firstDayDate.getDay(); 
+              startOfWeekOffset = startOfWeekOffset === 0 ? 6 : startOfWeekOffset - 1;
+
+              const gridCells = [];
+              for (let i = 0; i < startOfWeekOffset; i++) {
+                gridCells.push(<View key={`empty-${i}`} style={[styles.dayCell, { borderColor: 'transparent', backgroundColor: 'transparent' }]} />);
+              }
+
+              days.forEach((dateStr) => {
+                const isWorkDay = workData[dateStr] && (workData[dateStr].rate > 0 && workData[dateStr].hours > 0);
+                const dayNum = dateStr.split('-')[2];
+                gridCells.push(
+                  <TouchableOpacity key={dateStr} style={[styles.dayCell, isWorkDay ? styles.workDayCell : styles.weekendCell]} onPress={() => handleDayPress(dateStr)}>
+                    <Text style={[styles.dayText, isWorkDay && styles.workDayText]}>{parseInt(dayNum)}</Text>
+                  </TouchableOpacity>
+                );
+              });
+
+              const rows = [];
+              for (let i = 0; i < gridCells.length; i += 7) {
+                rows.push(
+                  <View key={`row-${i}`} style={{ flexDirection: 'row', justifyContent: 'flex-start', width: '100%' }}>
+                    {gridCells.slice(i, i + 7)}
+                  </View>
+                );
+              }
+
+              return rows;
+            })()}
+          </ScrollView>
+        )}
+
+        <View style={styles.statsContainer}>
+          <Text style={styles.statsText}>Рабочих дней: {stats.workDays}</Text>
+          <Text style={styles.statsText}>Выходных дней: {stats.weekendDays}</Text>
+          <Text style={styles.totalText}>Сумма: {stats.totalSum}</Text>
+        </View>
+
+        <TouchableOpacity style={styles.archiveButton} onPress={() => setArchiveModalVisible(true)}>
+          <Text style={styles.archiveButtonText}>Архив</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
+          <Text style={styles.pdfButtonText}>Сохранить PDF</Text>
+        </TouchableOpacity>
+
+        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Архив</Text>
+              <ScrollView style={{ maxHeight: 250 }}>
+                {[1, 2, 3, 4].map((m) => {
+                  const a = getArchiveStatsForMonth(m);
+                  return (
+                    <View key={m} style={styles.archiveItem}>
+                      <Text style={styles.archiveMonthName}>{a.monthName}</Text>
+                      <Text style={styles.archiveItemTotal}>Заработок: {a.totalSum}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
+                <Text style={styles.btnText}>Закрыть</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={modalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>День: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
+              <TextInput placeholder="Ставка" style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
+              <TextInput placeholder="Часы" style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleSaveDay}><Text style={styles.btnText}>Сохранить</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
 
       {/* ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ НА 3 СЕКУНДЫ ВНИЗУ ЭКРАНА */}
@@ -216,109 +508,73 @@ export default function App() {
           <Text style={styles.trialToastText}>⏱ Активен тестовый период (14 дней)</Text>
         </View>
       )}
-
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  mainContainer: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  loginContainer: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 30,
-    borderRadius: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  expiredContainer: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 30,
-    borderRadius: 15,
-    elevation: 5,
-    borderColor: '#ff4d4d',
-    borderWidth: 1,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
-  },
-  expiredTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#ff4d4d',
-    textAlign: 'center',
-  },
-  expiredText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 25,
-    lineHeight: 20,
-  },
-  input: {
-    width: '100%',
-    height: 50,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    marginBottom: 20,
-    backgroundColor: '#fafafa',
-  },
-  button: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#007BFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  /* Стили для всплывающей плашки триала */
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+  authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  authCard: { width: width * 0.88, backgroundColor: '#FFF', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  authTitle: { fontSize: 22, fontWeight: 'bold', color: '#111827', marginBottom: 8, textAlign: 'center' },
+  authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 20, textAlign: 'center' },
+  authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 10, fontSize: 16, marginBottom: 20, textAlign: 'center' },
+  authButton: { backgroundColor: '#0052CC', padding: 14, borderRadius: 10, alignItems: 'center' },
+  authButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 30 },
+  container: { flex: 1, paddingHorizontal: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  dateText: { fontSize: 15, color: '#6B7280' },
+  timeText: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
+  logoutButton: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#EF4444', borderRadius: 8 },
+  logoutText: { color: '#FFF', fontWeight: 'bold' },
+  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 10, textAlign: 'center' },
+  weekDaysRow: { flexDirection: 'row', marginBottom: 8 },
+  weekDayText: { width: (width - 32) / 7 - 8, marginHorizontal: 4, textAlign: 'center', fontWeight: '700', color: '#9CA3AF' },
+  weekendText: { color: '#EF4444' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: (width - 32) / 7 - 8, height: 42, margin: 4, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1 },
+  weekendCell: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
+  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
+  dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  workDayText: { color: '#FFF' },
+  statsContainer: { backgroundColor: '#FFF', padding: 14, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: '#E5E7EB' },
+  statsText: { fontSize: 14, color: '#4B5563' },
+  totalText: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
+  archiveButton: { backgroundColor: '#0052CC', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  archiveButtonText: { color: '#FFF', fontWeight: 'bold' },
+  pdfButton: { backgroundColor: '#10B981', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 },
+  pdfButtonText: { color: '#FFF', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: width * 0.85, backgroundColor: '#FFF', padding: 20, borderRadius: 16 },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
+  archiveItem: { padding: 10, backgroundColor: '#F3F4F6', borderRadius: 8, marginBottom: 6 },
+  archiveMonthName: { fontWeight: 'bold', color: '#0052CC' },
+  archiveItemTotal: { fontWeight: 'bold' },
+  input: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, marginBottom: 10 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
+  btn: { padding: 10, borderRadius: 8, minWidth: 80, alignItems: 'center' },
+  btnSave: { backgroundColor: '#0052CC', flex: 1, marginRight: 5 },
+  btnCancel: { backgroundColor: '#9CA3AF' },
+  btnText: { color: '#FFF', fontWeight: 'bold' },
+  /* СТИЛИ ДЛЯ ПЛАШКИ ТЕСТОВОГО ПЕРИОДА */
   trialToast: {
     position: 'absolute',
     bottom: 50,
     left: 20,
     right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.83)',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
+    zIndex: 9999
   },
   trialToastText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
+  }
 });

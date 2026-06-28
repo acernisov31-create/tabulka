@@ -10,7 +10,8 @@ import {
   SafeAreaView, 
   Dimensions,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Linking
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
@@ -26,11 +27,9 @@ const { width } = Dimensions.get('window');
 const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
 // ==========================================
-// НАСТРОЙКИ ВАШЕЙ ПОЧТЫ (EMAILJS КЛЮЧИ ПОДКЛЮЧЕНЫ)
+// НАСТРОЙКА ВАШЕГО EMAIL ДЛЯ ПРИЕМА ЗАПРОСОВ
 // ==========================================
-const EMAILJS_SERVICE_ID = "service_rbu0e49"; 
-const EMAILJS_TEMPLATE_ID = "template_7auwczj";
-const EMAILJS_PUBLIC_KEY = "LwZ6Bj4uouhfT6bGY";
+const MY_TARGET_EMAIL = "ВАШ_ОСНОВНОЙ_GMAIL@gmail.com"; 
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -218,6 +217,7 @@ export default function App() {
     }
   };
 
+  // МЕНЯЕМ ТОЛЬКО ЭТУ ФУНКЦИЮ: СОХРАНЕНИЕ В БАЗУ + СТАНДАРТНАЯ ОТПРАВКА НА EMAIL ЧЕРЕЗ СИСТЕМУ
   const handleSendSupportRequest = async () => {
     if (!clientName.trim() || clientPhone.trim() === '+38 (' || clientPhone.trim().length < 8) {
       Alert.alert("Ошибка", "Пожалуйста, заполните Имя и Телефон для связи");
@@ -227,7 +227,7 @@ export default function App() {
     try {
       const deviceId = Application.androidId || "DEVICE_GENERIC";
       
-      // 1. Сохраняем в Firebase
+      // 1. Сохраняем в Firebase (бэкап)
       const requestRef = ref(db, `support_requests/${deviceId}`);
       await set(requestRef, {
         name: clientName.trim(),
@@ -236,37 +236,24 @@ export default function App() {
         createdAt: Math.floor(Date.now() / 1000)
       });
 
-      // 2. Отправляем через EmailJS
-      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          service_id: EMAILJS_SERVICE_ID,
-          template_id: EMAILJS_TEMPLATE_ID,
-          user_id: EMAILJS_PUBLIC_KEY,
-          template_params: {
-            name: clientName.trim(),
-            phone: clientPhone.trim(),
-            deviceId: deviceId
-          }
-        })
-      });
+      // 2. Генерируем стандартную ссылку почты для Android
+      const subject = encodeURIComponent("Запрос ключа активации Tabulka");
+      const body = encodeURIComponent(`Данные запроса:\n\nИмя: ${clientName.trim()}\nТелефон: ${clientPhone.trim()}\nID устройства: ${deviceId}`);
+      const mailtoUrl = `mailto:${MY_TARGET_EMAIL}?subject=${subject}&body=${body}`;
 
       setRequestModalVisible(false);
-      
-      if (response.ok) {
-        Alert.alert("Отправлено", "Запрос успешно отправлен! Ожидайте связи.");
+
+      // 3. Открываем встроенное почтовое приложение
+      const supported = await Linking.canOpenURL(mailtoUrl);
+      if (supported) {
+        await Linking.openURL(mailtoUrl);
       } else {
-        const errorText = await response.text();
-        Alert.alert("Внимание", "Запрос сохранен в базу, но почта вернула ответ: " + errorText);
+        Alert.alert("Запрос сохранен", "Данные записаны в базу. На вашем устройстве не найдено настроенное приложение почты для прямой отправки.");
       }
 
     } catch (e) {
       setRequestModalVisible(false);
-      Alert.alert("Внимание", "Запрос сохранен в Firebase, но возникла ошибка сети при отправке на почту.");
+      Alert.alert("Внимание", "Запрос успешно сохранен в Firebase, но не удалось запустить почтовое приложение.");
     }
   };
 
@@ -570,7 +557,7 @@ export default function App() {
         <Modal visible={requestModalVisible} transparent={true} animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Введите Имя и Телефон для связи</Text>
+              <Text style={styles.modalTitle}>Отправить запрос</Text>
               <TextInput placeholder="Ваше Имя" style={styles.input} value={clientName} onChangeText={setClientName} />
               <TextInput placeholder="Телефон" keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
               <View style={styles.modalButtons}>

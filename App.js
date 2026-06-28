@@ -434,7 +434,6 @@ export default function App() {
             <Text style={styles.authButtonText}>Отправить запрос</Text>
           </TouchableOpacity>
           
-          {/* Контейнер-плашка для надежного рендеринга */}
           <View style={styles.noticeContainer}>
             <Text style={styles.noticeSubText}>Введите Ваше имя и телефон. Ожидайте, Вам перезвонят.</Text>
           </View>
@@ -608,37 +607,4 @@ export default function App() {
               <TextInput placeholder="Часы" style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleSaveDay}><Text style={styles.btnText}>Сохранить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
-
-      {trialNotice && (
-        <View style={styles.trialToastContainer} pointerEvents="none">
-          <View style={styles.trialToast}>
-            <Text style={styles.trialToastText}>⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (ОСТАЛОСЬ {daysLeft} ДН.)</Text>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
-  authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  authCard: { width: width * 0.9, backgroundColor: '#FFF', padding: 22, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#EF4444', marginBottom: 15, textAlign: 'center' },
-  authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 8, textAlign: 'left' },
-  authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  authButton: { padding: 13, borderRadius: 10, alignItems: 'center' },
-  authButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 30 },
-  container: { flex: 1, paddingHorizontal: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  dateText: { fontSize: 14, color: '#6B7280' },
-  timeText: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
-  
-  logoutButton: { paddingVertical:
+                <TouchableOpacity style={

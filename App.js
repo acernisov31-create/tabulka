@@ -29,7 +29,7 @@ const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
 // ==========================================
 // НАСТРОЙКА ВАШЕГО EMAIL ДЛЯ ПРИЕМА ЗАПРОСОВ
 // ==========================================
-const MY_TARGET_EMAIL = "ВАШ_ОСНОВНОЙ_GMAIL@gmail.com"; 
+const MY_TARGET_EMAIL = "kluh2026@gmail.com"; 
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -217,7 +217,6 @@ export default function App() {
     }
   };
 
-  // МЕНЯЕМ ТОЛЬКО ЭТУ ФУНКЦИЮ: СОХРАНЕНИЕ В БАЗУ + СТАНДАРТНАЯ ОТПРАВКА НА EMAIL ЧЕРЕЗ СИСТЕМУ
   const handleSendSupportRequest = async () => {
     if (!clientName.trim() || clientPhone.trim() === '+38 (' || clientPhone.trim().length < 8) {
       Alert.alert("Ошибка", "Пожалуйста, заполните Имя и Телефон для связи");
@@ -436,9 +435,12 @@ export default function App() {
           <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>Запросить полную версию:</Text>
           <TextInput placeholder="Ваше Имя" style={[styles.authInput, { marginBottom: 10 }]} value={clientName} onChangeText={setClientName} />
           <TextInput placeholder="Телефон" keyboardType="phone-pad" style={[styles.authInput, { marginBottom: 15 }]} value={clientPhone} onChangeText={setClientPhone} />
-          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#10B981', marginBottom: 25 }]} onPress={handleSendSupportRequest}>
+          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#10B981', marginBottom: 5 }]} onPress={handleSendSupportRequest}>
             <Text style={styles.authButtonText}>Отправить запрос</Text>
           </TouchableOpacity>
+          <Text style={styles.noticeSubText}>Ожидайте, Вам перезвонят</Text>
+
+          <View style={{ marginVertical: 15, borderBottomWidth: 1, borderColor: '#E5E7EB' }} />
 
           <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>Ввести постоянный ключ:</Text>
           <TextInput
@@ -560,6 +562,9 @@ export default function App() {
               <Text style={styles.modalTitle}>Отправить запрос</Text>
               <TextInput placeholder="Ваше Имя" style={styles.input} value={clientName} onChangeText={setClientName} />
               <TextInput placeholder="Телефон" keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
+              
+              <Text style={[styles.noticeSubText, { marginBottom: 15, color: '#4B5563' }]}>Ожидайте, Вам перезвонят</Text>
+
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={[styles.btn, styles.btnSave, { backgroundColor: '#10B981' }]} onPress={handleSendSupportRequest}><Text style={styles.btnText}>Отправить</Text></TouchableOpacity>
                 <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
@@ -620,7 +625,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
   authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
   authCard: { width: width * 0.9, backgroundColor: '#FFF', padding: 22, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 15, textAlign: 'center' },
+  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#EF4444', marginBottom: 15, textAlign: 'center' },
   authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 8, textAlign: 'left' },
   authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, fontSize: 16, marginBottom: 16, textAlign: 'center' },
   authButton: { padding: 13, borderRadius: 10, alignItems: 'center' },
@@ -667,6 +672,8 @@ const styles = StyleSheet.create({
   btnCancel: { backgroundColor: '#9CA3AF' },
   btnText: { color: '#FFF', fontWeight: 'bold' },
   
+  noticeSubText: { fontSize: 12, color: '#6B7280', textAlign: 'center', marginTop: 4, fontStyle: 'italic' },
+
   trialToastContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   trialToast: { backgroundColor: 'rgba(0, 0, 0, 0.88)', paddingVertical: 18, paddingHorizontal: 26, borderRadius: 14, maxWidth: width * 0.9, elevation: 8 },
   trialToastText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 }

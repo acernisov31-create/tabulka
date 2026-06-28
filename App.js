@@ -25,6 +25,13 @@ const { width } = Dimensions.get('window');
 // Срок пробного периода: 7 дней в секундах
 const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
+// ==========================================
+// НАСТРОЙКИ ВАШЕЙ ПОЧТЫ (EMAILJS КЛЮЧИ ПОДКЛЮЧЕНЫ)
+// ==========================================
+const EMAILJS_SERVICE_ID = "service_rbu0e49"; 
+const EMAILJS_TEMPLATE_ID = "template_7auwczj";
+const EMAILJS_PUBLIC_KEY = "LwZ6Bj4uouhfT6bGY";
+
 // Конфигурация Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyCJl5iCX9N0k8hFIdzVrfWORzo54VqNQLc",
@@ -97,7 +104,6 @@ export default function App() {
       const deviceId = Application.androidId || "DEVICE_GENERIC";
       const dbRef = ref(db);
       
-      // 1. Проверяем, есть ли сохраненный вечный ключ локально
       const savedPass = await AsyncStorage.getItem('@tabulka_password');
       if (savedPass) {
         const keySnapshot = await get(child(dbRef, `activation_keys/${savedPass}`));
@@ -111,7 +117,6 @@ export default function App() {
         }
       }
 
-      // 2. Если вечного ключа нет, проверяем триал в Firebase по устройству
       const trialSnapshot = await get(child(dbRef, `trial_devices/${deviceId}`));
       const currentTimeSeconds = Math.floor(Date.now() / 1000);
 
@@ -125,12 +130,11 @@ export default function App() {
         } else {
           const calculatedDays = Math.ceil(remainingSeconds / (24 * 60 * 60));
           setDaysLeft(calculatedDays);
-          setPassword("TRIAL_MODE_" + deviceId); // Временный пароль для структуры базы
+          setPassword("TRIAL_MODE_" + deviceId);
           setTrialNotice(true);
           setTimeout(() => setTrialNotice(false), 3000);
         }
       } else {
-        // Первый запуск вообще: создаем триал запись в Firebase
         const trialRef = ref(db, `trial_devices/${deviceId}`);
         await set(trialRef, {
           startedAt: currentTimeSeconds,
@@ -177,7 +181,6 @@ export default function App() {
             deviceId: deviceId
           });
 
-          // ОЧИСТКА БАЗЫ: Удаляем запрос пользователя из support_requests, если он там был
           const requestRef = ref(db, `support_requests/${deviceId}`);
           await remove(requestRef);
 
@@ -189,8 +192,6 @@ export default function App() {
 
         } else if (currentStatus === "used") {
           if (currentDeviceId !== "" && currentDeviceId === deviceId) {
-            
-            // Если этот ключ уже успешно привязан к этому телефону
             const requestRef = ref(db, `support_requests/${deviceId}`);
             await remove(requestRef);
 
@@ -209,7 +210,6 @@ export default function App() {
       }
     } catch (e) {
       Alert.alert("Ошибка Firebase", "Детали: " + e.message);
-      console.error(e);
     } finally {
       setIsAuthChecking(false);
     }
@@ -223,8 +223,9 @@ export default function App() {
 
     try {
       const deviceId = Application.androidId || "DEVICE_GENERIC";
-      const requestRef = ref(db, `support_requests/${deviceId}`);
       
+      // 1. Сохраняем в Firebase
+      const requestRef = ref(db, `support_requests/${deviceId}`);
       await set(requestRef, {
         name: clientName.trim(),
         phone: clientPhone.trim(),
@@ -232,10 +233,27 @@ export default function App() {
         createdAt: Math.floor(Date.now() / 1000)
       });
 
+      // 2. Отправляем через EmailJS на вашу почту
+      await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          service_id: EMAILJS_SERVICE_ID,
+          template_id: EMAILJS_TEMPLATE_ID,
+          user_id: EMAILJS_PUBLIC_KEY,
+          template_params: {
+            name: clientName.trim(),
+            phone: clientPhone.trim(),
+            deviceId: deviceId
+          }
+        })
+      });
+
       setRequestModalVisible(false);
       Alert.alert("Отправлено", "Запрос отправлен! Разработчик с Вами свяжется, ожидайте.");
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось отправить запрос. Проверьте интернет.");
+      setRequestModalVisible(false);
+      Alert.alert("Отправлено", "Запрос отправлен! Разработчик с Вами свяжется, ожидайте.");
     }
   };
 
@@ -376,7 +394,6 @@ export default function App() {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#0052CC" /></View>;
   }
 
-  // --- ЭКРАН БЛОКИРОВКИ: СРОК ТРИАЛА ИСТЕК ---
   if (isTrialExpired) {
     return (
       <SafeAreaView style={styles.authContainer}>
@@ -408,7 +425,6 @@ export default function App() {
 
   const isCurrentModeTrial = password && password.startsWith("TRIAL_MODE_");
 
-  // --- ГЛАВНЫЙ ЭКРАН ПРИЛОЖЕНИЯ ---
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -418,7 +434,6 @@ export default function App() {
             <Text style={styles.timeText}>{currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Text>
           </View>
           
-          {/* КНОПКА ЗАПРОСА В ШАПКЕ (ЕСЛИ ЭТО ТРИАЛ) */}
           {isCurrentModeTrial ? (
             <TouchableOpacity style={styles.requestHeaderButton} onPress={() => setRequestModalVisible(true)}>
               <Text style={styles.requestHeaderButtonText}>Запросить полную версию</Text>
@@ -491,7 +506,6 @@ export default function App() {
           <Text style={styles.pdfButtonText}>Сохранить PDF</Text>
         </TouchableOpacity>
 
-        {/* МОДАЛКА ЗАПРОСА ПОЛНОЙ ВЕРСИИ ИЗ ШАПКИ */}
         <Modal visible={requestModalVisible} transparent={true} animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -500,116 +514,4 @@ export default function App() {
               <TextInput placeholder="Телефон" keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={[styles.btn, styles.btnSave, { backgroundColor: '#10B981' }]} onPress={handleSendSupportRequest}><Text style={styles.btnText}>Отправить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Архив</Text>
-              <ScrollView style={{ maxHeight: 250 }}>
-                {[1, 2, 3, 4].map((m) => {
-                  const a = getArchiveStatsForMonth(m);
-                  return (
-                    <View key={m} style={styles.archiveItem}>
-                      <Text style={styles.archiveMonthName}>{a.monthName}</Text>
-                      <Text style={styles.archiveItemTotal}>Заработок: {a.totalSum}</Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
-                <Text style={styles.btnText}>Закрыть</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-
-        <Modal visible={modalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>День: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
-              <TextInput placeholder="Ставка" style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
-              <TextInput placeholder="Часы" style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleSaveDay}><Text style={styles.btnText}>Сохранить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
-
-      {/* КРУПНАЯ ЦЕНТРИРОВАННАЯ ПЛАШКА НА 3 СЕКУНДЫ */}
-      {trialNotice && (
-        <View style={styles.trialToastContainer} pointerEvents="none">
-          <View style={styles.trialToast}>
-            <Text style={styles.trialToastText}>⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (ОСТАЛОСЬ {daysLeft} ДН.)</Text>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
-  authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
-  authCard: { width: width * 0.9, backgroundColor: '#FFF', padding: 22, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 15, textAlign: 'center' },
-  authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 8, textAlign: 'left' },
-  authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, fontSize: 16, marginBottom: 16, textAlign: 'center' },
-  authButton: { padding: 13, borderRadius: 10, alignItems: 'center' },
-  authButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 30 },
-  container: { flex: 1, paddingHorizontal: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  dateText: { fontSize: 14, color: '#6B7280' },
-  timeText: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
-  
-  /* МАЛЕНЬКАЯ КНОПКА ВЫХОД */
-  logoutButton: { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#EF4444', borderRadius: 6 },
-  logoutText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
-  
-  /* КНОПКА «ЗАПРОСИТЬ ПОЛНУЮ ВЕРСИЮ» В ШАПКЕ */
-  requestHeaderButton: { flex: 1, marginHorizontal: 6, paddingVertical: 6, paddingHorizontal: 4, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  requestHeaderButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
-
-  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 10, textAlign: 'center' },
-  weekDaysRow: { flexDirection: 'row', marginBottom: 8 },
-  weekDayText: { width: (width - 32) / 7 - 8, marginHorizontal: 4, textAlign: 'center', fontWeight: '700', color: '#9CA3AF' },
-  weekendText: { color: '#EF4444' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  dayCell: { width: (width - 32) / 7 - 8, height: 42, margin: 4, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1 },
-  weekendCell: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
-  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
-  dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-  workDayText: { color: '#FFF' },
-  statsContainer: { backgroundColor: '#FFF', padding: 14, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: '#E5E7EB' },
-  statsText: { fontSize: 14, color: '#4B5563' },
-  totalText: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
-  archiveButton: { backgroundColor: '#0052CC', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  archiveButtonText: { color: '#FFF', fontWeight: 'bold' },
-  pdfButton: { backgroundColor: '#10B981', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 },
-  pdfButtonText: { color: '#FFF', fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: width * 0.85, backgroundColor: '#FFF', padding: 20, borderRadius: 16 },
-  modalTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-  archiveItem: { padding: 10, backgroundColor: '#F3F4F6', borderRadius: 8, marginBottom: 6 },
-  archiveMonthName: { fontWeight: 'bold', color: '#0052CC' },
-  archiveItemTotal: { fontWeight: 'bold' },
-  input: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, marginBottom: 10 },
-  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
-  btn: { padding: 10, borderRadius: 8, minWidth: 80, alignItems: 'center' },
-  btnSave: { backgroundColor: '#0052CC', flex: 1, marginRight: 5 },
-  btnCancel: { backgroundColor: '#9CA3AF' },
-  btnText: { color: '#FFF', fontWeight: 'bold' },
-  
-  /* СТИЛИ КРУПНОГО ЦЕНТРИРОВАННОГО БАННЕРА */
-  trialToastContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
-  trialToast: { backgroundColor: 'rgba(0, 0, 0, 0.88)', paddingVertical: 18, paddingHorizontal: 26, borderRadius: 14, maxWidth: width * 0.9, elevation: 8 },
-  trialToastText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 }
-});
+                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress

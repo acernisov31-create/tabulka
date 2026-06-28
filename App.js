@@ -20,10 +20,10 @@ import * as Application from 'expo-application';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, ref, onValue, set, get, child, off, update } from 'firebase/database';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-// Константа времени триала (14 дней в секундах)
-const TRIAL_DURATION_SECONDS = 14 * 24 * 60 * 60;
+// Константа времени триала (ИЗМЕНЕНО: 7 дней в секундах)
+const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -54,9 +54,9 @@ export default function App() {
   const [rate, setRate] = useState('');
   const [hours, setHours] = useState('');
 
-  // --- НОВЫЕ СОСТОЯНИЯ ДЛЯ ТЕСТОВОГО РЕЖИМА ---
-  const [trialNotice, setTrialNotice] = useState(false); // Для показа 3-секундного баннера
-  const [isTrialExpired, setIsTrialExpired] = useState(false); // Для экрана блокировки
+  // --- СОСТОЯНИЯ ДЛЯ ТЕСТОВОГО РЕЖИМА ---
+  const [trialNotice, setTrialNotice] = useState(false); 
+  const [isTrialExpired, setIsTrialExpired] = useState(false); 
 
   const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -92,7 +92,6 @@ export default function App() {
     try {
       const savedPass = await AsyncStorage.getItem('@tabulka_password');
       if (savedPass) {
-        // Если пароль сохранен, проверим в фоне, не тестовый ли он и не истек ли
         const deviceId = Application.androidId || "DEVICE_GENERIC";
         const dbRef = ref(db);
         const snapshot = await get(child(dbRef, `activation_keys/${savedPass}`));
@@ -107,9 +106,8 @@ export default function App() {
             if (timePassed > TRIAL_DURATION_SECONDS) {
               setIsTrialExpired(true);
               setIsAuthChecking(false);
-              return; // Оставляем на экране блокировки
+              return; 
             } else {
-              // Если все ок, покажем плашку на 3 секунды
               setTrialNotice(true);
               setTimeout(() => setTrialNotice(false), 3000);
             }
@@ -148,16 +146,13 @@ export default function App() {
         if (currentStatus === "free" && currentDeviceId === "") {
           const keyRef = ref(db, `activation_keys/${trimmed}`);
           
-          // Готовим объект для обновления в Firebase
           const updateFields = {
             status: "used",
             deviceId: deviceId
           };
 
-          // Если ключ тестовый — фиксируем время активации прямо сейчас
           if (isTrialKey) {
             updateFields.activatedAt = Math.floor(Date.now() / 1000);
-            // Запускаем показ плашки
             setTrialNotice(true);
             setTimeout(() => setTrialNotice(false), 3000);
           }
@@ -165,15 +160,16 @@ export default function App() {
           await update(keyRef, updateFields);
 
           await AsyncStorage.setItem('@tabulka_password', trimmed);
-          setIsTrialExpired(false); // Снимаем флаг блокировки, если ввели свежий ключ
+          setIsTrialExpired(false); 
           setPassword(trimmed);
           setInputPassword('');
-          Alert.alert("Успешно", isTrialKey ? "Активирован тестовый период на 14 дней!" : "Приложение успешно активировано!");
+          
+          // ИЗМЕНЕНО: Крупный текст в алерте при первой активации ключа
+          Alert.alert("Успешно", isTrialKey ? "АКТИВИРОВАН ТЕСТОВЫЙ ПЕРИОД НА 7 ДНЕЙ!" : "Приложение успешно активировано!");
 
         } else if (currentStatus === "used") {
           if (currentDeviceId !== "" && currentDeviceId === deviceId) {
             
-            // Если ключ используется на этом устройстве, проверяем время триала
             if (isTrialKey && keyData.activatedAt) {
               const currentTimeSeconds = Math.floor(Date.now() / 1000);
               if (currentTimeSeconds - keyData.activatedAt > TRIAL_DURATION_SECONDS) {
@@ -344,14 +340,14 @@ export default function App() {
     return <View style={styles.loadingContainer}><ActivityIndicator size="large" color="#0052CC" /></View>;
   }
 
-  // --- ЭКРАН БЛОКИРОВКИ: СРОК ТЕСТИРОВАНИЯ ИСТЕК ---
+  // --- ЭКРАН БЛОКИРОВКИ: СРОК ТЕСТИРОВАНИЯ ИСТЕК (ИЗМЕНЕНО: Написано 7 дней) ---
   if (isTrialExpired) {
     return (
       <SafeAreaView style={styles.authContainer}>
         <View style={[styles.authCard, { borderColor: '#EF4444', borderWidth: 1.5 }]}>
           <Text style={[styles.authTitle, { color: '#EF4444' }]}>Тестирование закончилось</Text>
           <Text style={styles.authSubtitle}>
-            Срок действия вашего тестового ключа (14 дней) исчерпан. Пожалуйста, введите постоянный ключ для продолжения работы.
+            Срок действия вашего тестового ключа (7 дней) исчерпан. Пожалуйста, введите постоянный ключ для продолжения работы.
           </Text>
           <TextInput
             placeholder="Введите постоянный ключ"
@@ -502,10 +498,12 @@ export default function App() {
         </Modal>
       </View>
 
-      {/* ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ НА 3 СЕКУНДЫ ВНИЗУ ЭКРАНА */}
+      {/* ИЗМЕНЕНО: ВСПЛЫВАЮЩЕЕ УВЕДОМЛЕНИЕ НА 3 СЕКУНДЫ СТРОГО ПОСЕРЕДИНЕ ЭКРАНА И С КРУПНЫМ ТЕКСТОМ */}
       {trialNotice && (
-        <View style={styles.trialToast}>
-          <Text style={styles.trialToastText}>⏱ Активен тестовый период (14 дней)</Text>
+        <View style={styles.trialToastContainer} pointerEvents="none">
+          <View style={styles.trialToast}>
+            <Text style={styles.trialToastText}>⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (7 ДНЕЙ)</Text>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -557,24 +555,35 @@ const styles = StyleSheet.create({
   btnSave: { backgroundColor: '#0052CC', flex: 1, marginRight: 5 },
   btnCancel: { backgroundColor: '#9CA3AF' },
   btnText: { color: '#FFF', fontWeight: 'bold' },
-  /* СТИЛИ ДЛЯ ПЛАШКИ ТЕСТОВОГО ПЕРИОДА */
-  trialToast: {
+  
+  /* ИЗМЕНЕНО: Новые стили для центрирования и увеличения плашки */
+  trialToastContainer: {
     position: 'absolute',
-    bottom: 50,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.83)',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    alignItems: 'center',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
-    elevation: 5,
+    alignItems: 'center',
     zIndex: 9999
   },
+  trialToast: {
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    paddingVertical: 18,
+    paddingHorizontal: 26,
+    borderRadius: 14,
+    maxWidth: width * 0.9,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+  },
   trialToastText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#FFF',
+    fontSize: 16,        // Текст стал крупнее (был 14)
+    fontWeight: 'bold',  // Стал жирнее
+    textAlign: 'center',
+    letterSpacing: 0.5
   }
 });

@@ -88,8 +88,11 @@ export default function App() {
 
     const unsubscribe = onValue(listRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) setWorkData(data);
-      else setWorkData({});
+      if (data) {
+        setWorkData(data);
+      } else {
+        setWorkData({});
+      }
       setIsLoadingData(false);
     }, (error) => {
       Alert.alert("Ошибка БД", "Проверьте правила доступа в консоли: " + error.message);
@@ -329,36 +332,65 @@ export default function App() {
   };
 
   const calculateStatsForPeriod = (daysList) => {
-    let workDays = 0; let weekendDays = 0; let totalSum = 0;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let workDays = 0; 
+    let weekendDays = 0; 
+    let totalSum = 0;
+    
+    const today = new Date(); 
+    today.setHours(0, 0, 0, 0);
+    
     const activeWorkDaysInMonth = daysList.filter(day => workData[day] && (workData[day].rate > 0 && workData[day].hours > 0));
-    if (activeWorkDaysInMonth.length === 0) return { workDays: 0, weekendDays: 0, totalSum: 0 };
+    if (activeWorkDaysInMonth.length === 0) {
+      return { workDays: 0, weekendDays: 0, totalSum: 0 };
+    }
+    
     const firstWorkDayNum = Math.min(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
     let lastWorkDayNum = Math.max(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
-    const sampleDay = daysList[0]; const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
+    
+    const sampleDay = daysList[0]; 
+    const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
+    
     if (viewYear === today.getFullYear() && (viewMonth - 1) === today.getMonth()) {
-      if (today.getDate() > lastWorkDayNum) lastWorkDayNum = today.getDate();
+      if (today.getDate() > lastWorkDayNum) {
+        lastWorkDayNum = today.getDate();
+      }
     }
+    
     daysList.forEach(day => {
       const dayNum = parseInt(day.split('-')[2]);
       const hasData = workData[day] && (workData[day].rate > 0 && workData[day].hours > 0);
-      if (hasData) { workDays++; totalSum += workData[day].rate * workData[day].hours; }
-      else { if (dayNum >= firstWorkDayNum && dayNum <= lastWorkDayNum) weekendDays++; }
+      if (hasData) { 
+        workDays++; 
+        totalSum += workData[day].rate * workData[day].hours; 
+      } else { 
+        if (dayNum >= firstWorkDayNum && dayNum <= lastWorkDayNum) {
+          weekendDays++; 
+        }
+      }
     });
+    
     return { workDays, weekendDays, totalSum };
   };
 
   const stats = calculateStatsForPeriod(getDaysInMonth(currentMonth));
 
   const getArchiveStatsForMonth = (backMonthsCount) => {
-    const targetDate = new Date(); targetDate.setMonth(targetDate.getMonth() - backMonthsCount);
-    const year = targetDate.getFullYear(); const month = targetDate.getMonth(); const days = getDaysForSpecificMonth(year, month);
-    let archiveWorkDays = 0; let archiveTotalSum = 0;
+    const targetDate = new Date(); 
+    targetDate.setMonth(targetDate.getMonth() - backMonthsCount);
+    
+    const year = targetDate.getFullYear(); 
+    const month = targetDate.getMonth(); 
+    const days = getDaysForSpecificMonth(year, month);
+    
+    let archiveWorkDays = 0; 
+    let archiveTotalSum = 0;
+    
     const activeDays = days.filter(day => workData[day] && (workData[day].rate > 0 && workData[day].hours > 0));
     if (activeDays.length > 0) {
       days.forEach(day => {
         if (workData[day] && (workData[day].rate > 0 && workData[day].hours > 0)) {
-          archiveWorkDays++; archiveTotalSum += workData[day].rate * workData[day].hours;
+          archiveWorkDays++; 
+          archiveTotalSum += workData[day].rate * workData[day].hours;
         }
       });
     }
@@ -514,4 +546,112 @@ export default function App() {
               <TextInput placeholder="Телефон" keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={[styles.btn, styles.btnSave, { backgroundColor: '#10B981' }]} onPress={handleSendSupportRequest}><Text style={styles.btnText}>Отправить</Text></TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress
+                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Архив</Text>
+              <ScrollView style={{ maxHeight: 250 }}>
+                {[1, 2, 3, 4].map((m) => {
+                  const a = getArchiveStatsForMonth(m);
+                  return (
+                    <View key={m} style={styles.archiveItem}>
+                      <Text style={styles.archiveMonthName}>{a.monthName}</Text>
+                      <Text style={styles.archiveItemTotal}>Заработок: {a.totalSum}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
+                <Text style={styles.btnText}>Закрыть</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={modalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>День: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
+              <TextInput placeholder="Ставка" style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
+              <TextInput placeholder="Часы" style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.btn, styles.btnSave]} onPress={handleSaveDay}><Text style={styles.btnText}>Сохранить</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setModalVisible(false)}><Text style={styles.btnText}>Отмена</Text></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+
+      {trialNotice && (
+        <View style={styles.trialToastContainer} pointerEvents="none">
+          <View style={styles.trialToast}>
+            <Text style={styles.trialToastText}>⏱ АКТИВЕН ТЕСТОВЫЙ ПЕРИОД (ОСТАЛОСЬ {daysLeft} ДН.)</Text>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+  authContainer: { flex: 1, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  authCard: { width: width * 0.9, backgroundColor: '#FFF', padding: 22, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  authTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 15, textAlign: 'center' },
+  authSubtitle: { fontSize: 14, color: '#4B5563', marginBottom: 8, textAlign: 'left' },
+  authInput: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, fontSize: 16, marginBottom: 16, textAlign: 'center' },
+  authButton: { padding: 13, borderRadius: 10, alignItems: 'center' },
+  authButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  safeArea: { flex: 1, backgroundColor: '#F9FAFB', paddingTop: 30 },
+  container: { flex: 1, paddingHorizontal: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  dateText: { fontSize: 14, color: '#6B7280' },
+  timeText: { fontSize: 22, fontWeight: 'bold', color: '#111827' },
+  
+  logoutButton: { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#EF4444', borderRadius: 6 },
+  logoutText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
+  
+  requestHeaderButton: { flex: 1, marginHorizontal: 6, paddingVertical: 6, paddingHorizontal: 4, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  requestHeaderButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
+
+  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', marginBottom: 10, textAlign: 'center' },
+  weekDaysRow: { flexDirection: 'row', marginBottom: 8 },
+  weekDayText: { width: (width - 32) / 7 - 8, marginHorizontal: 4, textAlign: 'center', fontWeight: '700', color: '#9CA3AF' },
+  weekendText: { color: '#EF4444' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: (width - 32) / 7 - 8, height: 42, margin: 4, justifyContent: 'center', alignItems: 'center', borderRadius: 8, borderWidth: 1 },
+  weekendCell: { backgroundColor: '#FFF', borderColor: '#E5E7EB' },
+  workDayCell: { backgroundColor: '#0052CC', borderColor: '#0052CC' },
+  dayText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  workDayText: { color: '#FFF' },
+  statsContainer: { backgroundColor: '#FFF', padding: 14, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: '#E5E7EB' },
+  statsText: { fontSize: 14, color: '#4B5563' },
+  totalText: { fontSize: 16, fontWeight: 'bold', marginTop: 4 },
+  archiveButton: { backgroundColor: '#0052CC', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+  archiveButtonText: { color: '#FFF', fontWeight: 'bold' },
+  pdfButton: { backgroundColor: '#10B981', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 8 },
+  pdfButtonText: { color: '#FFF', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: width * 0.85, backgroundColor: '#FFF', padding: 20, borderRadius: 16 },
+  modalTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
+  archiveItem: { padding: 10, backgroundColor: '#F3F4F6', borderRadius: 8, marginBottom: 6 },
+  archiveMonthName: { fontWeight: 'bold', color: '#0052CC' },
+  archiveItemTotal: { fontWeight: 'bold' },
+  input: { borderBottomWidth: 1, borderColor: '#D1D5DB', paddingVertical: 6, marginBottom: 10 },
+  modalButtons: { flexDirection: 'row', justifyContent: 'space-between' },
+  btn: { padding: 10, borderRadius: 8, minWidth: 80, alignItems: 'center' },
+  btnSave: { backgroundColor: '#0052CC', flex: 1, marginRight: 5 },
+  btnCancel: { backgroundColor: '#9CA3AF' },
+  btnText: { color: '#FFF', fontWeight: 'bold' },
+  
+  trialToastContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  trialToast: { backgroundColor: 'rgba(0, 0, 0, 0.88)', paddingVertical: 18, paddingHorizontal: 26, borderRadius: 14, maxWidth: width * 0.9, elevation: 8 },
+  trialToastText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 }
+});

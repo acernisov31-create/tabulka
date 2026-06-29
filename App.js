@@ -136,7 +136,7 @@ const translations = {
     alertSuccessMessage: "Додаток успешно активовано!",
     alertKeyUsed: "Цей ключ вже закріплений за іншим пристроєм!",
     alertKeyBlock: "Цей ключ заблокований адміністратором.",
-    alertKeyNotFound: "Ключ не знайдено в папці activation_keys бази даних.",
+    alertKeyNotFound: "Ключ не знайдено в папці activation_keys базы даних.",
     alertInputError: "Введіть коректні числа",
     alertPdfError: "Не вдалося створити PDF",
     alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для прямої відправки.",
@@ -564,4 +564,224 @@ export default function App() {
   if (isTrialExpired) {
     return (
       <SafeAreaView style={styles.authContainer}>
-        <View
+        <View style={styles.authCard}>
+          <Text style={styles.authTitle}>{t.trialExpiredTitle}</Text>
+          
+          <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>{t.requestFullVersion}</Text>
+          <TextInput placeholder={t.placeholderName} style={[styles.authInput, { marginBottom: 10 }]} value={clientName} onChangeText={setClientName} />
+          <TextInput placeholder={t.placeholderPhone} keyboardType="phone-pad" style={[styles.authInput, { marginBottom: 15 }]} value={clientPhone} onChangeText={setClientPhone} />
+          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#10B981', marginBottom: 10 }]} onPress={handleSendSupportRequest}>
+            <Text style={styles.authButtonText}>{t.btnSendRequest}</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.noticeContainer}>
+            <Text style={styles.noticeSubText}>{t.noticeText}</Text>
+          </View>
+
+          <View style={{ marginVertical: 15, borderBottomWidth: 1, borderColor: '#E5E7EB' }} />
+
+          <Text style={[styles.authSubtitle, { marginBottom: 10, fontWeight: 'bold' }]}>{t.enterKeyTitle}</Text>
+          <TextInput
+            placeholder={t.placeholderKey}
+            autoCapitalize="characters"
+            style={styles.authInput}
+            value={inputPassword}
+            onChangeText={setInputPassword}
+          />
+          <TouchableOpacity style={[styles.authButton, { backgroundColor: '#0052CC' }]} onPress={handleLogin}>
+            <Text style={styles.authButtonText}>{t.btnActivate}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const isCurrentModeTrial = password && password.startsWith("TRIAL_MODE_");
+  const currentLangLocale = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={{ flex: 1.2 }}>
+            <Text style={styles.dateText}>{currentTime.toLocaleDateString(currentLangLocale)}</Text>
+            <Text style={styles.timeText}>{currentTime.toLocaleTimeString(currentLangLocale, { hour: '2-digit', minute: '2-digit' })}</Text>
+          </View>
+          
+          {isCurrentModeTrial ? (
+            <TouchableOpacity style={styles.requestHeaderButton} onPress={() => setRequestModalVisible(true)}>
+              <Text style={styles.requestHeaderButtonText}>{t.requestFullVersion.replace(':', '')}</Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutText}>{t.btnExit}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Заголовок Месяца с кнопками-кружочками по краям */}
+        <View style={styles.monthSelectorRow}>
+          <TouchableOpacity 
+            style={[styles.langCircle, styles.langCircleRu, lang !== 'ru' && styles.langCircleDimmed]} 
+            onPress={() => handleSelectLanguage('ru')}
+          >
+            <Text style={styles.langCircleText}>Р</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.monthTitle}>
+            {currentMonth.toLocaleString(currentLangLocale, { month: 'long', year: 'numeric' }).toUpperCase()}
+          </Text>
+
+          <TouchableOpacity 
+            style={[styles.langCircle, styles.langCircleUk, lang !== 'uk' && styles.langCircleDimmed]} 
+            onPress={() => handleSelectLanguage('uk')}
+          >
+            <Text style={styles.langCircleText}>У</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.weekDaysRow}>
+          {t.weekDays.map((day, index) => {
+            const checkWeekend = day === 'Сб' || day === 'Вс' || day === 'Нд';
+            return (
+              <Text key={index} style={[styles.weekDayText, checkWeekend && styles.weekendText]}>
+                {day}
+              </Text>
+            );
+          })}
+        </View>
+
+        {isLoadingData ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#0052CC" />
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.calendarGrid}>
+            {(() => {
+              const days = getDaysInMonth(currentMonth);
+              if (days.length === 0) return null;
+
+              const firstDayDate = new Date(days[0]);
+              let startOfWeekOffset = firstDayDate.getDay(); 
+              startOfWeekOffset = startOfWeekOffset === 0 ? 6 : startOfWeekOffset - 1;
+
+              const gridCells = [];
+              for (let i = 0; i < startOfWeekOffset; i++) {
+                gridCells.push(<View key={`empty-${i}`} style={[styles.dayCell, { borderColor: 'transparent', backgroundColor: 'transparent' }]} />);
+              }
+
+              days.forEach((dateStr) => {
+                const isWorkDay = workData[dateStr] && (workData[dateStr].rate > 0 && workData[dateStr].hours > 0);
+                const dayNum = dateStr.split('-')[2];
+                gridCells.push(
+                  <TouchableOpacity 
+                    key={dateStr} 
+                    style={[styles.dayCell, isWorkDay ? styles.workDayCell : styles.weekendCell]} 
+                    onPress={() => handleDayPress(dateStr)}
+                  >
+                    <Text style={[styles.dayText, isWorkDay && styles.workDayText]}>
+                      {parseInt(dayNum)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              });
+
+              const rows = [];
+              for (let i = 0; i < gridCells.length; i += 7) {
+                rows.push(
+                  <View key={`row-${i}`} style={{ flexDirection: 'row', justifyContent: 'flex-start', width: '100%' }}>
+                    {gridCells.slice(i, i + 7)}
+                  </View>
+                );
+              }
+
+              return rows;
+            })()}
+          </ScrollView>
+        )}
+
+        <View style={styles.statsContainer}>
+          <Text style={styles.statsText}>{t.statsWorkDays}: {stats.workDays}</Text>
+          <Text style={styles.statsText}>{t.statsWeekendDays}: {stats.weekendDays}</Text>
+          <Text style={styles.totalText}>{t.statsTotalSum}: {stats.totalSum}</Text>
+        </View>
+
+        <TouchableOpacity style={styles.archiveButton} onPress={() => setArchiveModalVisible(true)}>
+          <Text style={styles.archiveButtonText}>{t.btnArchive}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
+          <Text style={styles.pdfButtonText}>{t.btnSavePdf}</Text>
+        </TouchableOpacity>
+
+        {/* Модалка ручного/первого выбора языка */}
+        <Modal visible={langModalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { paddingVertical: 25 }]}>
+              <TouchableOpacity 
+                style={[styles.authButton, { backgroundColor: '#10B981', marginBottom: 15, width: '100%' }]} 
+                onPress={() => handleSelectLanguage('uk')}
+              >
+                <Text style={styles.authButtonText}>Виберіть мову (Укр)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.authButton, { backgroundColor: '#0052CC', width: '100%' }]} 
+                onPress={() => handleSelectLanguage('ru')}
+              >
+                <Text style={styles.authButtonText}>Выберите язык (Рус)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={requestModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{t.btnSendRequest}</Text>
+              <TextInput placeholder={t.placeholderName} style={styles.input} value={clientName} onChangeText={setClientName} />
+              <TextInput placeholder={t.placeholderPhone} keyboardType="phone-pad" style={styles.input} value={clientPhone} onChangeText={setClientPhone} />
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.btn, styles.btnSave, { backgroundColor: '#10B981' }]} onPress={handleSendSupportRequest}>
+                  <Text style={styles.btnText}>{t.btnSendRequest}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => setRequestModalVisible(false)}>
+                  <Text style={styles.btnText}>{t.btnCancel}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.noticeContainer, { marginTop: 12 }]}>
+                <Text style={styles.noticeSubText}>{t.noticeText}</Text>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{t.btnArchive}</Text>
+              <ScrollView style={{ maxHeight: 250 }}>
+                {[1, 2, 3, 4].map((m) => {
+                  const a = getArchiveStatsForMonth(m);
+                  return (
+                    <View key={m} style={styles.archiveItem}>
+                      <Text style={styles.archiveMonthName}>{a.monthName}</Text>
+                      <Text style={styles.archiveItemTotal}>{t.archiveEarnings}: {a.totalSum}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <TouchableOpacity style={[styles.btn, styles.btnCancel, { width: '100%', marginTop: 10 }]} onPress={() => setArchiveModalVisible(false)}>
+                <Text style={styles.btnText}>{t.btnClose}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={modalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>{t.modalDayTitle}: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
+              <TextInput placeholder={t.placeholderRate} style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
+              <TextInput placeholder={t.placeholderHours} style={styles.

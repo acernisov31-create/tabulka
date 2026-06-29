@@ -18,25 +18,12 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as Application from 'expo-application';
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, get, child, off, update, remove } from 'firebase/database';
-
 const { width } = Dimensions.get('window');
 const TRIAL_DURATION_SECONDS = 7 * 24 * 60 * 60;
 const MY_TARGET_EMAIL = "kluh2026@gmail.com"; 
 
-const firebaseConfig = {
-  apiKey: "AIzaSyCJl5iCX9N0k8hFIdzVrfWORzo54VqNQLc",
-  authDomain: "my-apk-protection.firebaseapp.com",
-  databaseURL: "https://my-apk-protection-default-rtdb.firebaseio.com",
-  projectId: "my-apk-protection",
-  storageBucket: "my-apk-protection.firebasestorage.app",
-  messagingSenderId: "686147592915",
-  appId: "1:686147592915:web:9aecdcddc12cdcc1306a26"
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const db = getDatabase(app);
+// Используем REST URL нашей базы данных Firebase напрямую
+const FIREBASE_REST_URL = "https://my-apk-protection-default-rtdb.firebaseio.com";
 
 const translations = {
   ru: {
@@ -83,7 +70,7 @@ const translations = {
     alertSuccessMessage: "Приложение успешно активировано!",
     alertKeyUsed: "Этот ключ уже закреплен за другим устройством!",
     alertKeyBlock: "Этот ключ заблокирован администратором.",
-    alertKeyNotFound: "Ключ не найден в папке activation_keys базы данных.",
+    alertKeyNotFound: "Ключ не найден в базе данных.",
     alertInputError: "Введите корректные числа",
     alertPdfError: "Не удалось создать PDF",
     alertRequestSaved: "Данные записаны в базу. На вашем устройстве не найдено настроенное приложение почты для прямой отправки.",
@@ -101,7 +88,7 @@ const translations = {
     noticeText: "Введіть Ваше ім'я та телефон. Очікуйте, Вам зателефонують.",
     enterKeyTitle: "Ввести постійний ключ:",
     placeholderKey: "Постійний ключ активації",
-    btnActivate: "Активувати",
+    btnActivate: "Активирувати",
     btnExit: "Вихід",
     weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
     statsWorkDays: "Робочих днів",
@@ -134,7 +121,7 @@ const translations = {
     alertSuccessMessage: "Додаток успешно активовано!",
     alertKeyUsed: "Цей ключ вже закріплений за іншим пристроєм!",
     alertKeyBlock: "Цей ключ заблокований адміністратором.",
-    alertKeyNotFound: "Ключ не знайдено в папці activation_keys базы даних.",
+    alertKeyNotFound: "Ключ не знайдено в базі даних.",
     alertInputError: "Введіть коректні числа",
     alertPdfError: "Не вдалося створити PDF",
     alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для збереження.",
@@ -200,37 +187,39 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (!password) {
-      setWorkData({});
-      return;
-    }
-
+  // REST-метод для получения данных календаря (заменяет onValue)
+  const fetchWorkData = async (currentPassword) => {
+    if (!currentPassword) return;
     setIsLoadingData(true);
-    const listRef = ref(db, `tabulka_lists/${password}`);
-
-    const unsubscribe = onValue(listRef, (snapshot) => {
-      const data = snapshot.val();
+    try {
+      const response = await fetch(`${FIREBASE_REST_URL}/tabulka_lists/${currentPassword}.json`);
+      const data = await response.json();
       setWorkData(data || {});
+    } catch (error) {
+      Alert.alert("Ошибка сети", "Не удалось обновить данные из базы");
+    } finally {
       setIsLoadingData(false);
-    }, (error) => {
-      Alert.alert("Ошибка БД", "Проверить правила: " + error.message);
-      setIsLoadingData(false);
-    });
+    }
+  };
 
-    return () => off(listRef);
+  useEffect(() => {
+    if (password) {
+      fetchWorkData(password);
+    } else {
+      setWorkData({});
+    }
   }, [password]);
 
   const checkSavedPassword = async () => {
     try {
       const deviceId = Application.androidId || "DEVICE_GENERIC";
-      const dbRef = ref(db);
-      
       const savedPass = await AsyncStorage.getItem('@tabulka_password');
+      
       if (savedPass) {
-        const keySnapshot = await get(child(dbRef, `activation_keys/${savedPass}`));
-        if (keySnapshot.exists()) {
-          const keyData = keySnapshot.val();
+        const response = await fetch(`${FIREBASE_REST_URL}/activation_keys/${savedPass}.json`);
+        const keyData = await response.json();
+        
+        if (keyData) {
           if (keyData.status === "used" && keyData.deviceId === deviceId) {
             setPassword(savedPass);
             setIsAuthChecking(false);
@@ -239,11 +228,11 @@ export default function App() {
         }
       }
 
-      const trialSnapshot = await get(child(dbRef, `trial_devices/${deviceId}`));
+      const trialResponse = await fetch(`${FIREBASE_REST_URL}/trial_devices/${deviceId}.json`);
+      const trialData = await trialResponse.json();
       const currentTimeSeconds = Math.floor(Date.now() / 1000);
 
-      if (trialSnapshot.exists()) {
-        const trialData = trialSnapshot.val();
+      if (trialData) {
         const timePassed = currentTimeSeconds - trialData.startedAt;
         const remainingSeconds = TRIAL_DURATION_SECONDS - timePassed;
 
@@ -257,10 +246,9 @@ export default function App() {
           setTimeout(() => setTrialNotice(false), 3000);
         }
       } else {
-        const trialRef = ref(db, `trial_devices/${deviceId}`);
-        await set(trialRef, {
-          startedAt: currentTimeSeconds,
-          deviceId: deviceId
+        await fetch(`${FIREBASE_REST_URL}/trial_devices/${deviceId}.json`, {
+          method: 'PUT',
+          body: JSON.stringify({ startedAt: currentTimeSeconds, deviceId: deviceId })
         });
         setDaysLeft(7);
         setPassword("TRIAL_MODE_" + deviceId);
@@ -286,20 +274,19 @@ export default function App() {
 
     try {
       const deviceId = Application.androidId || "DEVICE_GENERIC"; 
-      const dbRef = ref(db);
-      const snapshot = await get(child(dbRef, `activation_keys/${trimmed}`));
+      const response = await fetch(`${FIREBASE_REST_URL}/activation_keys/${trimmed}.json`);
+      const keyData = await response.json();
       
-      if (snapshot.exists()) {
-        const keyData = snapshot.val();
+      if (keyData) {
         const currentStatus = keyData.status || "free";
         const currentDeviceId = keyData.deviceId || "";
 
         if (currentStatus === "free" && currentDeviceId === "") {
-          const keyRef = ref(db, `activation_keys/${trimmed}`);
-          await update(keyRef, { status: "used", deviceId: deviceId });
-
-          const requestRef = ref(db, `support_requests/${deviceId}`);
-          await remove(requestRef);
+          await fetch(`${FIREBASE_REST_URL}/activation_keys/${trimmed}.json`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: "used", deviceId: deviceId })
+          });
+          await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, { method: 'DELETE' });
 
           await AsyncStorage.setItem('@tabulka_password', trimmed);
           setIsTrialExpired(false); 
@@ -308,9 +295,7 @@ export default function App() {
           Alert.alert(t.alertSuccessTitle, t.alertSuccessMessage);
         } else if (currentStatus === "used") {
           if (currentDeviceId && currentDeviceId === deviceId) {
-            const requestRef = ref(db, `support_requests/${deviceId}`);
-            await remove(requestRef);
-
+            await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, { method: 'DELETE' });
             await AsyncStorage.setItem('@tabulka_password', trimmed);
             setIsTrialExpired(false);
             setPassword(trimmed);
@@ -325,7 +310,7 @@ export default function App() {
         Alert.alert("Уведомление", t.alertKeyNotFound);
       }
     } catch (e) {
-      Alert.alert("Ошибка Firebase", "Детали: " + e.message);
+      Alert.alert("Ошибка сети", "Не удалось связаться с базой данных");
     } finally {
       setIsAuthChecking(false);
     }
@@ -339,12 +324,14 @@ export default function App() {
 
     try {
       const deviceId = Application.androidId || "DEVICE_GENERIC";
-      const requestRef = ref(db, `support_requests/${deviceId}`);
-      await set(requestRef, {
-        name: clientName.trim(),
-        phone: clientPhone.trim(),
-        deviceId: deviceId,
-        createdAt: Math.floor(Date.now() / 1000)
+      await fetch(`${FIREBASE_REST_URL}/support_requests/${deviceId}.json`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: clientName.trim(),
+          phone: clientPhone.trim(),
+          deviceId: deviceId,
+          createdAt: Math.floor(Date.now() / 1000)
+        })
       });
 
       const subject = encodeURIComponent("Запрос ключа активации Tabulka");
@@ -383,8 +370,20 @@ export default function App() {
 
   const saveDayToFirebase = async (dateStr, dayData) => {
     try {
-      const dayRef = ref(db, `tabulka_lists/${password}/${dateStr}`);
-      await set(dayRef, dayData);
+      await fetch(`${FIREBASE_REST_URL}/tabulka_lists/${password}/${dateStr}.json`, {
+        method: 'PUT',
+        body: JSON.stringify(dayData)
+      });
+      // Локально обновляем стейт, чтобы сразу увидеть изменения без лишних запросов
+      setWorkData(prev => {
+        const updated = { ...prev };
+        if (dayData === null) {
+          delete updated[dateStr];
+        } else {
+          updated[dateStr] = dayData;
+        }
+        return updated;
+      });
     } catch (e) {
       Alert.alert("Ошибка сети", "Не удалось отправить данные");
     }

@@ -33,7 +33,7 @@ const translations = {
     placeholderName: "Ваше Имя",
     placeholderPhone: "Телефон",
     btnSendRequest: "Отправить запрос",
-    noticeText: "Введите Ваше имя и телефон. Ожидайте, Вам перезвонят.",
+    noticeText: "Введите Ваше имя и телефон. Ожайдайте, Вам перезвонят.",
     enterKeyTitle: "Ввести постоянный ключ:",
     placeholderKey: "Постоянный ключ активации",
     btnActivate: "Активировать",
@@ -74,20 +74,34 @@ const translations = {
     alertPdfError: "Не удалось создать PDF",
     alertRequestSaved: "Данные записаны в базу. На вашем устройстве не найдено настроенное приложение почты для прямой отправки.",
     alertMailError: "Запрос успешно сохранен в Firebase, но не удалось запустить почтовое приложение.",
-    alertFillFields: "Пожалуйста, заполните Имя и Телефон для связи"
+    alertFillFields: "Пожалуйста, заполните Имя и Телефон для связи",
+    btnToday: "Сегодня",
+    noRecordsText: "Нет записей за этот день",
+    subSectionTitle: "Работы за день:",
+    dayTotalText: "Всего за день:",
+    btnAddRecord: "+ Добавить запись",
+    selectLangTitle: "Выберите язык (Рус)",
+    errorTitle: "Ошибка",
+    networkErrorTitle: "Ошибка сети",
+    networkErrorMsg: "Не удалось обновить данные из базы",
+    activationErrorTitle: "Ошибка активации",
+    lockTitle: "Блокировка",
+    noticeTitle: "Уведомление",
+    networkSendError: "Не удалось отправить данные",
+    hourUnit: "ч."
   },
   uk: {
     locale: 'uk-UA',
-    trialExpiredTitle: "Термін пробного тестування (7 днів) закінчився",
-    requestFullVersion: "Запросити повну версію:",
-    requestFullVersionHeader: "Запросити повну версію",
+    trialExpiredTitle: "Термін дії пробного періоду (7 днів) закінчився",
+    requestFullVersion: "Надіслати запит на повну версію:",
+    requestFullVersionHeader: "Запитувати повну версію",
     placeholderName: "Ваше Ім'я",
     placeholderPhone: "Телефон",
     btnSendRequest: "Надіслати запит",
     noticeText: "Введіть Ваше ім'я та телефон. Очікуйте, Вам зателефонують.",
-    enterKeyTitle: "Ввести постійний ключ:",
-    placeholderKey: "Постійний ключ активації",
-    btnActivate: "Активирувати",
+    enterKeyTitle: "Ввести ключ активації:",
+    placeholderKey: "Ключ активації (постійний)",
+    btnActivate: "Активувати",
     btnExit: "Вихід",
     weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
     statsWorkDays: "Робочих днів",
@@ -114,7 +128,7 @@ const translations = {
     alertExitTitle: "Вихід",
     alertExitMessage: "Вийти з профілю?",
     alertExitCancel: "Скасувати",
-    alertFormatError: "Невірний формат",
+    alertFormatError: "Неправильний формат",
     alertFormatShort: "Занадто короткий ключ активації.",
     alertSuccessTitle: "Успішно",
     alertSuccessMessage: "Додаток успешно активовано!",
@@ -123,9 +137,23 @@ const translations = {
     alertKeyNotFound: "Ключ не знайдено в базі даних.",
     alertInputError: "Введіть коректні числа",
     alertPdfError: "Не вдалося створити PDF",
-    alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для збереження.",
-    alertMailError: "Запит успішно збережено в Firebase, но не вдалося запустити поштовий додаток.",
-    alertFillFields: "Будь ласка, заповніть Ім'я та Телефон для зв'язку"
+    alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для прямої відправки.",
+    alertMailError: "Запит успішно збережено в Firebase, але не вдалося запустити поштовий додаток.",
+    alertFillFields: "Будь ласка, заповніть Ім'я та Телефон для зв'язку",
+    btnToday: "Сьогодні",
+    noRecordsText: "Немає записів за цей день",
+    subSectionTitle: "Роботи за день:",
+    dayTotalText: "Всього за день:",
+    btnAddRecord: "+ Додати запис",
+    selectLangTitle: "Оберіть мову (Укр)",
+    errorTitle: "Помилка",
+    networkErrorTitle: "Помилка мережі",
+    networkErrorMsg: "Не вдалося оновити дані з бази",
+    activationErrorTitle: "Помилка активації",
+    lockTitle: "Блокування",
+    noticeTitle: "Сповіщення",
+    networkSendError: "Не вдалося надіслати дані",
+    hourUnit: "год."
   }
 };
 
@@ -182,7 +210,7 @@ export default function App() {
       setLang(selectedLang);
       setLangModalVisible(false);
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось сохранить язык");
+      Alert.alert(translations[selectedLang || 'ru'].errorTitle, "Error saving language");
     }
   };
 
@@ -196,7 +224,6 @@ export default function App() {
       const data = await response.json();
       
       if (data) {
-        // Нормализация данных: если в базе лежит старый формат (одиночная запись), превращаем её в массив
         const normalized = {};
         Object.keys(data).forEach(dateKey => {
           const dayContent = data[dateKey];
@@ -219,7 +246,7 @@ export default function App() {
         setWorkData({});
       }
     } catch (error) {
-      Alert.alert("Ошибка сети", "Не удалось обновить данные из базы");
+      Alert.alert(t.networkErrorTitle, t.networkErrorMsg);
     } finally {
       setIsLoadingData(false);
     }
@@ -280,7 +307,7 @@ export default function App() {
       }
 
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось проверить статус авторизации");
+      Alert.alert(t.errorTitle, "Auth check failed");
     } finally {
       setIsAuthChecking(false);
     }
@@ -324,16 +351,16 @@ export default function App() {
             setPassword(trimmed);
             setInputPassword('');
           } else {
-            Alert.alert("Ошибка активации", t.alertKeyUsed);
+            Alert.alert(t.activationErrorTitle, t.alertKeyUsed);
           }
         } else {
-          Alert.alert("Блокировка", t.alertKeyBlock);
+          Alert.alert(t.lockTitle, t.alertKeyBlock);
         }
       } else {
-        Alert.alert("Уведомление", t.alertKeyNotFound);
+        Alert.alert(t.noticeTitle, t.alertKeyNotFound);
       }
     } catch (e) {
-      Alert.alert("Ошибка сети", "Не удалось связаться с базой данных");
+      Alert.alert(t.networkErrorTitle, "Database connection failed");
     } finally {
       setIsAuthChecking(false);
     }
@@ -341,7 +368,7 @@ export default function App() {
 
   const handleSendSupportRequest = async () => {
     if (!clientName.trim() || clientPhone.trim() === '+38 (' || clientPhone.trim().length < 8) {
-      Alert.alert("Ошибка", t.alertFillFields);
+      Alert.alert(t.errorTitle, t.alertFillFields);
       return;
     }
 
@@ -367,11 +394,11 @@ export default function App() {
       if (supported) {
         await Linking.openURL(mailtoUrl);
       } else {
-        Alert.alert("Запрос сохранен", t.alertRequestSaved);
+        Alert.alert(t.alertSuccessTitle, t.alertRequestSaved);
       }
     } catch (e) {
       setRequestModalVisible(false);
-      Alert.alert("Внимание", t.alertMailError);
+      Alert.alert(t.noticeTitle, t.alertMailError);
     }
   };
 
@@ -391,7 +418,6 @@ export default function App() {
     ]);
   };
 
-  // Хелперы сумм за день
   const getDayTotal = (dayData) => {
     if (!dayData || !dayData.records) return 0;
     return dayData.records.reduce((sum, rec) => sum + (rec.rate * rec.hours), 0);
@@ -414,7 +440,7 @@ export default function App() {
     const numHours = parseFloat(hours);
 
     if (!rate || !hours || isNaN(numRate) || isNaN(numHours) || numRate <= 0 || numHours <= 0) {
-      Alert.alert("Ошибка", t.alertInputError);
+      Alert.alert(t.errorTitle, t.alertInputError);
       return;
     }
 
@@ -472,21 +498,13 @@ export default function App() {
       setSelectedDate(null);
       fetchWorkData(password);
     } catch (e) {
-      Alert.alert("Ошибка сети", "Не удалось отправить данные");
+      Alert.alert(t.networkErrorTitle, t.networkSendError);
     }
   };
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
-    return Array.from({ length: days }, (_, i) => {
-      const dayNum = i + 1;
-      return `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    });
-  };
-
-  const getDaysForSpecificMonth = (year, month) => {
     const days = new Date(year, month + 1, 0).getDate();
     return Array.from({ length: days }, (_, i) => {
       const dayNum = i + 1;
@@ -537,7 +555,6 @@ export default function App() {
 
   const stats = calculateStatsForPeriod(getDaysInMonth(currentMonth));
 
-  // Получение строго 12 месяцев для архива без багов смещения дат JS
   const getArchiveMonthsList = () => {
     const list = [];
     const today = new Date();
@@ -555,6 +572,11 @@ export default function App() {
   const loadArchiveMonthData = (year, month) => {
     setCurrentMonth(new Date(year, month, 1));
     setArchiveModalVisible(false);
+  };
+
+  const handleGoToToday = () => {
+    const today = new Date();
+    setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
   };
 
   const exportToPDF = async () => {
@@ -582,7 +604,7 @@ export default function App() {
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
       await Sharing.shareAsync(uri);
     } catch (error) {
-      Alert.alert("Ошибка", t.alertPdfError);
+      Alert.alert(t.errorTitle, t.alertPdfError);
     }
   };
 
@@ -706,9 +728,14 @@ export default function App() {
             <Text style={styles.langCircleText}>Р</Text>
           </TouchableOpacity>
 
-          <Text style={styles.monthTitle}>
-            {currentMonth.toLocaleString(t.locale, { month: 'long', year: 'numeric' }).toUpperCase()}
-          </Text>
+          <View style={styles.monthTitleWrapper}>
+            <Text style={styles.monthTitle}>
+              {currentMonth.toLocaleString(t.locale, { month: 'long', year: 'numeric' }).toUpperCase()}
+            </Text>
+            <TouchableOpacity style={styles.todayButton} onPress={handleGoToToday}>
+              <Text style={styles.todayButtonText}>{t.btnToday.toUpperCase()}</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity 
             style={lang === 'uk' ? styles.langCircleUk : styles.langCircleUkDimmed} 
@@ -757,7 +784,7 @@ export default function App() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContentLang}>
               <TouchableOpacity style={styles.btnLangUk} onPress={() => handleSelectLanguage('uk')}>
-                <Text style={styles.authButtonText}>Виберіть мову (Укр)</Text>
+                <Text style={styles.authButtonText}>Оберіть мову (Укр)</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.btnLangRu} onPress={() => handleSelectLanguage('ru')}>
                 <Text style={styles.authButtonText}>Выберите язык (Рус)</Text>
@@ -789,7 +816,6 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* Восстановленный Архив на строго 12 прошедших месяцев */}
         <Modal visible={archiveModalVisible} transparent={true} animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -815,19 +841,18 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* Полная модалка дня с поддержкой нескольких записей */}
         <Modal visible={modalVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>{t.modalDayTitle}: {selectedDate ? selectedDate.split('-')[2] : ''}</Text>
               
-              <Text style={styles.subSectionTitle}>Работы за день:</Text>
+              <Text style={styles.subSectionTitle}>{t.subSectionTitle}</Text>
               <ScrollView style={styles.miniRecordsList}>
                 {workData[selectedDate]?.records && workData[selectedDate].records.length > 0 ? (
                   workData[selectedDate].records.map((rec) => (
                     <View key={rec.id} style={styles.miniRecordRow}>
                       <Text style={styles.miniRecordText}>
-                        {rec.rate} × {rec.hours} ч. = {rec.rate * rec.hours}
+                        {rec.rate} × {rec.hours} {t.hourUnit} = {rec.rate * rec.hours}
                       </Text>
                       <TouchableOpacity onPress={() => handleDeleteRecord(rec.id)} style={styles.miniDeleteBtn}>
                         <Text style={styles.miniDeleteBtnText}>🗑</Text>
@@ -835,19 +860,19 @@ export default function App() {
                     </View>
                   ))
                 ) : (
-                  <Text style={styles.noRecordsText}>Нет записей за этот день</Text>
+                  <Text style={styles.noRecordsText}>{t.noRecordsText}</Text>
                 )}
               </ScrollView>
 
               <View style={styles.daySummaryLabelBox}>
-                <Text style={styles.daySummaryLabelText}>Всего за день: {getDayTotal(workData[selectedDate])}</Text>
+                <Text style={styles.daySummaryLabelText}>{t.dayTotalText} {getDayTotal(workData[selectedDate])}</Text>
               </View>
 
               <TextInput placeholder={t.placeholderRate} style={styles.input} keyboardType="numeric" value={rate} onChangeText={setRate} />
               <TextInput placeholder={t.placeholderHours} style={styles.input} keyboardType="numeric" value={hours} onChangeText={setHours} />
               
               <TouchableOpacity style={styles.btnAddNewRecordRow} onPress={handleAddRecord}>
-                <Text style={styles.btnAddNewRecordRowText}>+ Добавить запись</Text>
+                <Text style={styles.btnAddNewRecordRowText}>{t.btnAddRecord}</Text>
               </TouchableOpacity>
 
               <View style={styles.modalButtons}>
@@ -895,8 +920,11 @@ const styles = StyleSheet.create({
   logoutText: { color: '#FFF', fontSize: 12, fontWeight: 'bold' },
   requestHeaderButton: { flex: 1, marginHorizontal: 6, paddingVertical: 6, paddingHorizontal: 4, backgroundColor: '#10B981', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
   requestHeaderButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
-  monthSelectorRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
-  monthTitle: { fontSize: 18, fontWeight: '700', color: '#374151', textAlign: 'center', marginHorizontal: 10, flexShrink: 1, minWidth: 160 },
+  monthSelectorRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  monthTitleWrapper: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  monthTitle: { fontSize: 16, fontWeight: '700', color: '#374151', textAlign: 'center', marginRight: 8, maxWidth: 150 },
+  todayButton: { paddingVertical: 4, paddingHorizontal: 8, backgroundColor: '#0052CC', borderRadius: 6 },
+  todayButtonText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
   langCircleText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   langCircleRu: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1, backgroundColor: '#0052CC' },
   langCircleRuDimmed: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1, backgroundColor: '#0052CC', opacity: 0.35 },
@@ -944,8 +972,6 @@ const styles = StyleSheet.create({
   trialToastContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
   trialToast: { backgroundColor: 'rgba(0, 0, 0, 0.88)', paddingVertical: 18, paddingHorizontal: 26, borderRadius: 14, maxWidth: width * 0.9, elevation: 8 },
   trialToastText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 0.5 },
-  
-  // Новые стили для мульти-записей
   subSectionTitle: { fontSize: 13, fontWeight: 'bold', color: '#4B5563', marginBottom: 5 },
   miniRecordsList: { maxHeight: 110, backgroundColor: '#F3F4F6', borderRadius: 8, padding: 8, marginBottom: 8 },
   miniRecordRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, borderBottomWidth: 1, borderColor: '#E5E7EB' },

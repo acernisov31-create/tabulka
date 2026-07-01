@@ -38,10 +38,14 @@ jobs:
       - name: Generate Android Folder (Prebuild)
         run: npx expo prebuild --platform android
 
-      - name: Fix Broken Repositories (Remove Sonatype)
+      - name: Ultimate Sonatype Bypass (Redirect to MavenCentral)
         run: |
-          # Вырезаем кривую ссылку на sonatype snapshots из сгенерированных скриптов Gradle
-          find android -name "build.gradle" -type f -exec sed -i '/oss.sonatype.org\/content\/repositories\/snapshots/d' {} +
+          # Внедряем жесткое правило во все файлы build.gradle: игнорировать упавший сервер и брать из mavenCentral
+          find android -name "build.gradle" -type f -exec sed -i 's|maven { url "https://oss.sonatype.org/content/repositories/snapshots" }|// removed sonatype|g' {} +
+          
+          # Дополнительно форсируем mavenCentral для всего проекта через настройки инициализации Gradle
+          mkdir -p ~/.gradle
+          echo "allprojects { repositories { maven { url 'https://repo1.maven.org/maven2/' } } }" > ~/.gradle/init.gradle
 
       - name: Build Android Release (Bypass Sonatype Timeout)
         run: |

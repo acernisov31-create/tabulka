@@ -38,14 +38,41 @@ jobs:
       - name: Generate Android Folder (Prebuild)
         run: npx expo prebuild --platform android
 
-      - name: Ultimate Sonatype Bypass (Redirect to MavenCentral)
+      - name: Total Sonatype Block & Redirection
         run: |
-          # Внедряем жесткое правило во все файлы build.gradle: игнорировать упавший сервер и брать из mavenCentral
-          find android -name "build.gradle" -type f -exec sed -i 's|maven { url "https://oss.sonatype.org/content/repositories/snapshots" }|// removed sonatype|g' {} +
+          # Полностью вырезаем упоминания упавшего сервера из всех файлов настроек Gradle
+          find android -name "*.gradle" -type f -exec sed -i 's|maven { url "https://oss.sonatype.org/content/repositories/snapshots" }|// blocked sonatype|g' {} +
           
-          # Дополнительно форсируем mavenCentral для всего проекта через настройки инициализации Gradle
+          # Создаем глобальный конфигуратор, который перехватывает ЛЮБЫЕ запросы и заворачивает их на Google и MavenCentral
           mkdir -p ~/.gradle
-          echo "allprojects { repositories { maven { url 'https://repo1.maven.org/maven2/' } } }" > ~/.gradle/init.gradle
+          cat << 'EOF' > ~/.gradle/init.gradle
+          allprojects {
+              buildscript {
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          settingsEvaluated { settings ->
+              settings.pluginManagement {
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+              settings.dependencyResolutionManagement {
+                  repositories {
+                      google()
+                      mavenCentral()
+                  }
+              }
+          }
+          EOF
 
       - name: Build Android Release (Bypass Sonatype Timeout)
         run: |

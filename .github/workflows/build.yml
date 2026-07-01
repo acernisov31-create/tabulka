@@ -7,9 +7,6 @@ on:
       - master
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,7 +18,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -29,58 +30,13 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Install dependencies
-        run: npm install
-
-      - name: Generate Android Folder (Prebuild)
-        run: npx expo prebuild --platform android
-
-      - name: Total Sonatype Block & Redirection
-        run: |
-          # Полностью вырезаем упоминания упавшего сервера из всех файлов настроек Gradle
-          find android -name "*.gradle" -type f -exec sed -i 's|maven { url "https://oss.sonatype.org/content/repositories/snapshots" }|// blocked sonatype|g' {} +
-          
-          # Создаем глобальный конфигуратор, который перехватывает ЛЮБЫЕ запросы и заворачивает их на Google и MavenCentral
-          mkdir -p ~/.gradle
-          cat << 'EOF' > ~/.gradle/init.gradle
-          allprojects {
-              buildscript {
-                  repositories {
-                      google()
-                      mavenCentral()
-                  }
-              }
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          settingsEvaluated { settings ->
-              settings.pluginManagement {
-                  repositories {
-                      google()
-                      mavenCentral()
-                  }
-              }
-              settings.dependencyResolutionManagement {
-                  repositories {
-                      google()
-                      mavenCentral()
-                  }
-              }
-          }
-          EOF
-
-      - name: Build Android Release (Bypass Sonatype Timeout)
+      - name: Build Android Release
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd android
-          ./gradlew assembleRelease -Pandroid.experimental.runLintInProcess=false -x lintVitalRelease -x lint
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          ./gradlew clean
+          ./gradlew assembleRelease --stacktrace --info

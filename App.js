@@ -101,7 +101,7 @@ const translations = {
     noticeText: "Введіть Ваше ім'я та телефон. Очікуйте, Вам зателефонують.",
     enterKeyTitle: "Ввести ключ активації:",
     placeholderKey: "Ключ активації (постійний)",
-    btnActivate: "Актувати",
+    btnActivate: "Активувати",
     btnExit: "Вихід",
     weekDays: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
     statsWorkDays: "Робочих днів",
@@ -138,13 +138,13 @@ const translations = {
     alertInputError: "Введіть коректні числа",
     alertPdfError: "Не вдалося створити PDF",
     alertRequestSaved: "Дані записані в базу. На вашому пристрої не знайдено налаштованого поштового додатка для прямої відправки.",
-    alertMailError: "Запит успішно збережено в Firebase, але не вдалося запустити поштовий додаток.",
+    alertMailError: "Запит успішно збережено в Firebase, но не вдалося запустити поштовий додаток.",
     alertFillFields: "Будь ласка, заповніть Ім'я та Телефон для зв'язку",
     btnToday: "Сьогодні",
     noRecordsText: "Немає записів за цей день",
     subSectionTitle: "Роботи за день:",
     dayTotalText: "Всього за день:",
-    btnAddRecord: "+ Добавить запись",
+    btnAddRecord: "+ Додати запис",
     selectLangTitle: "Оберіть мову (Укр)",
     errorTitle: "Помилка",
     networkErrorTitle: "Помилка мережі",
@@ -536,4 +536,23 @@ export default function App() {
     
     const activeWorkDaysInMonth = daysList.filter(day => workData[day] && getDayTotal(workData[day]) > 0);
     if (activeWorkDaysInMonth.length === 0) {
-      return { workDays: 0, weekendDays:
+      return { workDays: 0, weekendDays: 0, totalSum: 0 };
+    }
+    
+    const firstWorkDayNum = Math.min(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
+    let lastWorkDayNum = Math.max(...activeWorkDaysInMonth.map(d => parseInt(d.split('-')[2])));
+    
+    const sampleDay = daysList[0]; 
+    const [viewYear, viewMonth] = sampleDay.split('-').map(Number);
+    
+    if (viewYear === today.getFullYear() && (viewMonth - 1) === today.getMonth()) {
+      if (today.getDate() > lastWorkDayNum) {
+        lastWorkDayNum = today.getDate();
+      }
+    }
+    
+    daysList.forEach(day => {
+      const dayNum = parseInt(day.split('-')[2]);
+      const dayTotal = getDayTotal(workData[day]);
+      if (dayTotal > 0) { 
+        wDays++;

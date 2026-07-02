@@ -32,9 +32,6 @@ jobs:
           java-version: '17'
           distribution: 'zulu'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-
       - name: Fix Permissions and Build
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"

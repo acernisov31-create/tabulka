@@ -1,24 +1,33 @@
 {
   "expo": {
-    "name": "табулька",
+    "name": "Табулька",
     "slug": "tabulka",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F9FAFB"
+      "backgroundColor": "#F4F5F7"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./icon.png",
-        "backgroundColor": "#F9FAFB"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#F4F5F7"
       },
-      "package": "com.viktorbal.tabulka"
+      "package": "com.wi_ktor.tabulka"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "145a6a06-e01c-4e97-b3ca-0ab394a7384f"
+      }
     }
   }
 }
